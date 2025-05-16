@@ -224,9 +224,18 @@
     articleMain.children[2].textContent = srcArticle.snippet;
 
     // words
-    articleMain.children[3].textContent =
-      calcReadTime(srcArticle.word_count) + " MIN READ";
-
+    //articleMain.children[3].textContent = calcReadTime(srcArticle.word_count) + " MIN READ";
+    {
+      let readtime = <HTMLLinkElement>newArticle.children[1].children[0];
+      readtime.textContent = calcReadTime(srcArticle.word_count) + " MIN READ";
+      readtime.href = srcArticle.web_url;
+    }
+    {
+      let button = <HTMLButtonElement>newArticle.children[1].children[1];
+      button.onclick = openComments;
+      button.children[0].textContent = srcArticle._id
+    }
+    
     // feed_thumbnail
     {
       let feed_thumbnail = articleMain.children[0];
@@ -329,6 +338,10 @@
       return "";
     }
   }
+
+  async function openComments(this: HTMLButtonElement) {
+    console.log("openComments: " + this.children[0].textContent);
+  }
 </script>
 
 <main>
@@ -370,8 +383,6 @@
     <div class="line_horizontal_double"></div>
   </header>
 
-  <button onclick={BUTTON}> BUTTON </button>
-
   <section id="feed_grid">
     <h1 hidden>Articles</h1>
     <!--Concrete articles go here!-->
@@ -392,12 +403,19 @@
 
         <p class="feed_main">Feed_Main</p>
 
-        <p class="feed_readtime">
-          The read time, as calculated from word count.
-        </p>
-
-        <div class="line_horizontal"></div>
       </a>
+      <div>
+        <a class="feed_readtime">
+          The read time, as calculated from word count.
+        </a>
+        <button>
+          Comments
+          <p hidden>
+            article ID
+          </p>
+        </button>
+      </div>
+      <div class="line_horizontal"></div>
     </article>
   </template>
 </main>
