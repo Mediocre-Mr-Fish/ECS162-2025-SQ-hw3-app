@@ -319,9 +319,9 @@
   async function BUTTON() {
     try {
       console.log("BUTTON");
-      const res = await fetch("/api/AAAAAAA");
+      const res = await fetch("/api/articles/2/apple");
       const data = await res.json();
-      console.log(data.AAAAAAA);
+      console.log(data);
       return data.apiKey;
     } catch (error) {
       console.error("data.AAAAAAA: ", error);

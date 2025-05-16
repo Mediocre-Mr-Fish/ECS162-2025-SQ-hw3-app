@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, redirect
 import os
 from flask_cors import CORS
 from pymongo import MongoClient
@@ -20,9 +20,13 @@ CORS(app)
 def get_key():
     return jsonify({'apiKey': os.getenv('NYT_API_KEY')})
 
-@app.route('/api/AAAAAAA')
-def test_AAAAAAA():
-    return jsonify({'AAAAAAA': "AAAAAAA"})
+@app.route('/api/articles/<int:page>/<string:query>')
+def fetch_article(page:int, query:str):
+    #query = "apple"
+    key = os.getenv('NYT_API_KEY')
+    #page = 1
+    return redirect(f"https://api.nytimes.com/svc/search/v2/articlesearch.json?q={query}&api-key={key}&page={page}", code=302)
+    return jsonify({'query': query, "test": page})
 
 
 @app.route('/')
