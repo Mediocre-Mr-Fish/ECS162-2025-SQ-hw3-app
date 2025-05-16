@@ -7,7 +7,7 @@
 
   let apiKey: string = "default";
 
-  const searchDefault: string = "davis";
+  const searchDefault: string = "";//"davis";
   let searchTerm: string = searchDefault;
   let pagesLoaded: number = 0;
   // lock_scrollFetch is used to prevent the page from spamming fetch when the page scrolls. See init_scroll()
@@ -90,9 +90,9 @@
         let searchBar = <HTMLInputElement>form.children[0];
         searchTerm = searchBar.value;
 
-        if (searchTerm === "") {
-          searchTerm = searchDefault;
-        }
+        // if (searchTerm === "") {
+        //   searchTerm = searchDefault;
+        // }
         console.log("Submiting Search: " + searchTerm);
         clearArticles();
         fetchAddArticles(2);
@@ -136,7 +136,12 @@
     page: number,
     key: string,
   ): string {
-    return `https://api.nytimes.com/svc/search/v2/articlesearch.json?q=${query}&api-key=${key}&page=${page}`;
+    if (query) {
+      return `https://api.nytimes.com/svc/search/v2/articlesearch.json?q=${query}&api-key=${key}&page=${page}`;
+    } else {
+      let fq = `timesTag.location:"Sacramento (Calif)" OR timesTag.location:"Davis (Calif)"`
+      return `https://api.nytimes.com/svc/search/v2/articlesearch.json?fq=${fq.replace(":","%3A")}&api-key=${key}&page=${page}`;
+    }
   }
 
   export async function fetchData(page: number): Promise<Response> {
