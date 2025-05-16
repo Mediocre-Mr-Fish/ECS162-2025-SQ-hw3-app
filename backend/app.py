@@ -2,10 +2,16 @@ from flask import Flask, jsonify, redirect, url_for, session
 from authlib.integrations.flask_client import OAuth
 from authlib.common.security import generate_token
 import os
+from pymongo import MongoClient
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
+with open("debug_out.txt", "w") as f:
+    f.write("DEBUG LOG\n")
+def debug_out(message:str):
+    with open("debug_out.txt", "a") as f:
+        f.write(str(message) + "\n")
 
 oauth = OAuth(app)
 
@@ -25,17 +31,22 @@ oauth.register(
     client_kwargs={'scope': 'openid email profile'}
 )
 
-@app.route('/api/key')
-def get_key():
-    return jsonify({'apiKey': os.getenv('NYT_API_KEY')})
+# @app.route('/api/key')
+# def get_key():
+#     return jsonify({'apiKey': os.getenv('NYT_API_KEY')})
 
-@app.route('/api/articles/<int:page>/<string:query>')
-def fetch_article(page:int, query:str):
-    #query = "apple"
+@app.route('/api/articles-query/<int:page>/<string:query>')
+def fetch_article_query(page:int, query:str):
     key = os.getenv('NYT_API_KEY')
-    #page = 1
     return redirect(f"https://api.nytimes.com/svc/search/v2/articlesearch.json?q={query}&api-key={key}&page={page}", code=302)
-    return jsonify({'query': query, "test": page})
+
+@app.route('/api/articles-filter/<int:page>/<string:filter>')
+def fetch_article_filter(page:int, filter:str):
+    key = os.getenv('NYT_API_KEY')
+    filter = filter.replace(":","%3A")
+    debug_out(f"https://api.nytimes.com/svc/search/v2/articlesearch.json?fq={filter}&api-key={key}&page={page}")
+    return redirect(f"https://api.nytimes.com/svc/search/v2/articlesearch.json?fq={filter}&api-key={key}&page={page}", code=302)
+
 
 @app.route('/')
 def home():
@@ -66,3 +77,5 @@ def logout():
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8000)
+
+

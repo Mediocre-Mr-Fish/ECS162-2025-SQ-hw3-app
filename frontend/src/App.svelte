@@ -5,9 +5,9 @@
 
   console.log("Hello World!");
 
-  let apiKey: string = "default";
+  // let apiKey: string = "default";
 
-  const searchDefault: string = "";//"davis";
+  const searchDefault: string = ""; //"davis";
   let searchTerm: string = searchDefault;
   let pagesLoaded: number = 0;
   // lock_scrollFetch is used to prevent the page from spamming fetch when the page scrolls. See init_scroll()
@@ -21,7 +21,7 @@
    * Function to fetch API key and return it
    * provided by project starter code
    */
-  export async function fetchKey(): Promise<string> {
+  /*export async function fetchKey(): Promise<string> {
     try {
       console.log("Fetching key...");
       const res = await fetch("/api/key");
@@ -34,7 +34,7 @@
       console.error("Failed to fetch API key:", error);
       return "";
     }
-  }
+  }*/
 
   /**
    * Intitialization function
@@ -45,7 +45,7 @@
     displayDate();
     init_search_bar();
     init_scroll();
-    apiKey = await fetchKey();
+    // apiKey = await fetchKey();
     fetchAddArticles(2);
   }
 
@@ -120,7 +120,7 @@
 
     await Promise.all(promises);
     for (let i = 0; i < promises.length; i++) {
-      processArticles(await promises[i])
+      processArticles(await promises[i]);
     }
     console.log("done");
   }
@@ -134,13 +134,15 @@
   export function generateURL(
     query: string,
     page: number,
-    key: string,
+    // key: string,
   ): string {
     if (query) {
-      return `https://api.nytimes.com/svc/search/v2/articlesearch.json?q=${query}&api-key=${key}&page=${page}`;
+      // return `https://api.nytimes.com/svc/search/v2/articlesearch.json?q=${query}&api-key=${key}&page=${page}`;
+      return `/api/articles-query/${page}/${query}`;
     } else {
-      let fq = `timesTag.location:"Sacramento (Calif)" OR timesTag.location:"Davis (Calif)"`
-      return `https://api.nytimes.com/svc/search/v2/articlesearch.json?fq=${fq.replace(":","%3A")}&api-key=${key}&page=${page}`;
+      let fq = `timesTag.location:"Sacramento (Calif)" OR timesTag.location:"Davis (Calif)"`;
+      // return `https://api.nytimes.com/svc/search/v2/articlesearch.json?fq=${fq.replace(":","%3A")}&api-key=${key}&page=${page}`;
+      return `/api/articles-filter/${page}/${fq}`;
     }
   }
 
@@ -148,13 +150,13 @@
     console.log("Fetching data...");
     //console.log("API key: " + apiKey);
     try {
-      let fetchResult = await fetch(generateURL(searchTerm, page, apiKey));
+      let fetchResult = await fetch(generateURL(searchTerm, page/*, apiKey*/));
       console.log("Data received.");
       checkStatus(fetchResult);
       //console.log(await fetchResult.json())
       //console.log(JSON.stringify(await fetchResult.json()))
       //processArticles(await fetchResult.json());
-      return await fetchResult.json()
+      return await fetchResult.json();
     } catch (error) {
       errFunc(<Error>error);
     }
@@ -322,7 +324,6 @@
       const res = await fetch("/api/articles/2/apple");
       const data = await res.json();
       console.log(data);
-      return data.apiKey;
     } catch (error) {
       console.error("data.AAAAAAA: ", error);
       return "";
@@ -369,9 +370,7 @@
     <div class="line_horizontal_double"></div>
   </header>
 
-  <button onclick={BUTTON}>
-    BUTTON
-  </button>
+  <button onclick={BUTTON}> BUTTON </button>
 
   <section id="feed_grid">
     <h1 hidden>Articles</h1>
