@@ -3,6 +3,8 @@ import os
 from flask_cors import CORS
 from pymongo import MongoClient
 
+#import requests
+
 static_path = os.getenv('STATIC_PATH','static')
 template_path = os.getenv('TEMPLATE_PATH','templates')
 # Mongo connection
@@ -18,6 +20,11 @@ CORS(app)
 def get_key():
     return jsonify({'apiKey': os.getenv('NYT_API_KEY')})
 
+@app.route('/api/AAAAAAA')
+def test_AAAAAAA():
+    return jsonify({'AAAAAAA': "AAAAAAA"})
+
+
 @app.route('/')
 @app.route('/<path:path>')
 def serve_frontend(path=''):
@@ -25,9 +32,11 @@ def serve_frontend(path=''):
         return send_from_directory(static_path, path)
     return send_from_directory(template_path, 'index.html')
 
-@app.route("/test-mongo")
+#@app.route("/test-mongo")
+@app.route("/api/test-mongo") # idk why but only /api calls work
 def test_mongo():
     return jsonify({"collections": db.list_collection_names()})
+
 
 if __name__ == '__main__':
     debug_mode = os.getenv('FLASK_ENV') != 'production'

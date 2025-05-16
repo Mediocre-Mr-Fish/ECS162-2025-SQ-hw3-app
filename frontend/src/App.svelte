@@ -315,6 +315,19 @@
   }
 
   // #endregion Date Stuff
+
+  async function BUTTON() {
+    try {
+      console.log("BUTTON");
+      const res = await fetch("/api/AAAAAAA");
+      const data = await res.json();
+      console.log(data.AAAAAAA);
+      return data.apiKey;
+    } catch (error) {
+      console.error("data.AAAAAAA: ", error);
+      return "";
+    }
+  }
 </script>
 
 <main>
@@ -355,6 +368,10 @@
     </section>
     <div class="line_horizontal_double"></div>
   </header>
+
+  <button onclick={BUTTON}>
+    BUTTON
+  </button>
 
   <section id="feed_grid">
     <h1 hidden>Articles</h1>
