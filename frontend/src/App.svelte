@@ -15,7 +15,21 @@
 
   const scrollThreshold: number = 1000;
 
+  // The articleID of the last article whose comments were opened
+  let lastOpenedComments: string = "";
+
   // #region Initialization
+
+  let email = "";
+  onMount(async () => {
+    const url = new URL(window.location.href);
+    const em = url.searchParams.get("email");
+    if (em) {
+      email = em;
+    }
+
+    //console.log(email);
+  });
 
   /**
    * Function to fetch API key and return it
@@ -150,7 +164,7 @@
     console.log("Fetching data...");
     //console.log("API key: " + apiKey);
     try {
-      let fetchResult = await fetch(generateURL(searchTerm, page/*, apiKey*/));
+      let fetchResult = await fetch(generateURL(searchTerm, page /*, apiKey*/));
       console.log("Data received.");
       checkStatus(fetchResult);
       //console.log(await fetchResult.json())
@@ -233,9 +247,12 @@
     {
       let button = <HTMLButtonElement>newArticle.children[1].children[1];
       button.onclick = openComments;
-      button.children[0].textContent = srcArticle._id
+
+      const idTrim = "/";
+      const sections = srcArticle._id.split(idTrim);
+      button.children[0].textContent = sections[sections.length - 1];
     }
-    
+
     // feed_thumbnail
     {
       let feed_thumbnail = articleMain.children[0];
@@ -327,10 +344,17 @@
 
   // #endregion Date Stuff
 
+  // #region Comments
+
+  function redirectToLogin() {
+    window.location.href = "http://localhost:8000/login";
+  }
   async function BUTTON() {
+    window.location.href = "http://localhost:8000/login";
+    return;
     try {
       console.log("BUTTON");
-      const res = await fetch("/api/articles/2/apple");
+      const res = await fetch("/login");
       const data = await res.json();
       console.log(data);
     } catch (error) {
@@ -339,9 +363,147 @@
     }
   }
 
-  async function openComments(this: HTMLButtonElement) {
-    console.log("openComments: " + this.children[0].textContent);
+  function renderComment(
+    commentTemplate: HTMLElement,
+    commentJson: any,
+    articleID: string,
+    replyTemplate: HTMLElement,
+  ): HTMLElement {
+    let newComment = <HTMLElement>commentTemplate.cloneNode(true);
+
+    //comment_username
+    newComment.children[0].textContent = commentJson.username;
+
+    //comment_body
+    newComment.children[1].textContent = commentJson.content;
+
+    //reply_form
+    {
+      let form = <HTMLFormElement>newComment.children[3];
+      form.addEventListener("submit", postReply);
+      form.children[2].textContent = articleID;
+      form.children[3].textContent = commentJson._id;
+    }
+
+    //comment_replies
+    {
+      let replyList = newComment.children[2];
+      for (let index = 0; index < commentJson.replies.length; index++) {
+        const replyJson = commentJson.replies[index];
+        replyList.appendChild(renderReply(replyTemplate, replyJson));
+      }
+    }
+
+    return newComment;
   }
+
+  function renderReply(
+    replyTemplate: HTMLElement,
+    replyJson: any,
+  ): HTMLElement {
+    let newReply = <HTMLElement>replyTemplate.cloneNode(true);
+    //reply_username
+    newReply.children[0].textContent = replyJson.username;
+
+    //commentreply_body_body
+    newReply.children[1].textContent = replyJson.content;
+    return newReply;
+  }
+
+  async function openComments(this: HTMLButtonElement) {
+    const articleID = this.children[0].textContent!;
+
+    console.log("openComments: " + articleID);
+
+    //https://www.w3schools.com/howto/tryit.asp?filename=tryhow_js_sidenav
+    let comments_panel = document.getElementById("comments_panel")!;
+    comments_panel.style.width = "250px";
+    if (lastOpenedComments === articleID) {
+      // don't rerender comments
+    } else {
+      lastOpenedComments = articleID;
+      
+      const comments_list = document.getElementById("comments_list")!;
+      while (comments_list.children.length > 0) {
+        comments_list.children[0].remove();
+      }
+
+      let comments = null;
+      try {
+        const res = await fetch(`/api/comments/${articleID}`);
+        const data = await res.json();
+        console.log(data);
+        comments = data.comments;
+      } catch (error) {
+        console.error("error: ", error);
+        comments_list.textContent = "Failed to load comments";
+        return;
+      }
+
+      const commentTemplate = <HTMLElement>(
+        (<HTMLTemplateElement>document.getElementById("template_comment")!)
+          .content.children[0]
+      );
+      const replyTemplate = <HTMLElement>(
+        (<HTMLTemplateElement>document.getElementById("template_reply")!)
+          .content.children[0]
+      );
+
+      for (let index = 0; index < comments.length; index++) {
+        comments_list.appendChild(
+          renderComment(
+            commentTemplate,
+            comments[index],
+            articleID,
+            replyTemplate,
+          ),
+        );
+      }
+
+      comments_panel.children[0].textContent = articleID;
+    }
+  }
+  async function closeComments() {
+    document.getElementById("comments_panel")!.style.width = "0px";
+  }
+
+  async function postCommentCall(
+    articleID: string,
+    parentID: string,
+    content: string,
+  ) {
+    try {
+      let data = new FormData();
+      data.append("articleID", articleID);
+      data.append("parentID", parentID);
+      data.append("email", email);
+      data.append("content", content);
+
+      await fetch("/api/postcomment", {
+        method: "POST",
+        body: data,
+      });
+    } catch (error) {
+      console.log("Failed to post reply.");
+    }
+  }
+  async function postReply(e: SubmitEvent) {
+    e.preventDefault();
+    if (!email) {
+      redirectToLogin();
+      return;
+    }
+
+    const form = <HTMLElement>e.target!;
+    const reply_box = <HTMLInputElement>form.children[0];
+    const reply_body = reply_box.value;
+
+    const articleID = form.children[2].textContent!;
+    const commentID = form.children[3].textContent!;
+    postCommentCall(articleID, commentID, reply_body);
+    //console.log(reply_body);
+  }
+  // #endregion Comments
 </script>
 
 <main>
@@ -383,6 +545,26 @@
     <div class="line_horizontal_double"></div>
   </header>
 
+  <button onclick={BUTTON}>BUTTON</button>
+
+  <section id="comments_panel">
+    <h1 hidden>Comments Pannel</h1>
+    <div>
+      <button id="comments_panel_closebutton" onclick={closeComments}>
+        close
+      </button>
+      {#if email}
+        <p>{email}</p>
+      {:else}
+        <button onclick={redirectToLogin}>Login</button>
+      {/if}
+    </div>
+    <section id="comments_list">
+      <h1>Comments</h1>
+      <!-- Commnets go here! -->
+    </section>
+  </section>
+
   <section id="feed_grid">
     <h1 hidden>Articles</h1>
     <!--Concrete articles go here!-->
@@ -402,7 +584,6 @@
         <h2 class="feed_title">Feed_Title</h2>
 
         <p class="feed_main">Feed_Main</p>
-
       </a>
       <div>
         <a class="feed_readtime">
@@ -410,17 +591,82 @@
         </a>
         <button>
           Comments
-          <p hidden>
-            article ID
-          </p>
+          <p hidden>article ID</p>
         </button>
       </div>
       <div class="line_horizontal"></div>
     </article>
   </template>
+
+  <template id="template_comment">
+    <div class="comment">
+      <p class="comment_username">Commenter Username</p>
+      <p class="comment_body">Comment Body</p>
+      <section class="comment_replies">
+        <h1>Replies</h1>
+        <!-- replies go here -->
+      </section>
+      <form class="reply_form">
+        <input class="reply_textbox" type="text" />
+        <button class="reply_submit">Post</button>
+        <p hidden>ARTICLE_ID</p>
+        <p hidden>COMMENT_ID</p>
+      </form>
+    </div>
+  </template>
+
+  <template id="template_reply">
+    <div class="reply">
+      <p class="reply_username">Replier Username</p>
+      <p class="reply_body">Repy Body</p>
+    </div>
+  </template>
 </main>
 
 <style>
+  /* #region Comments */
+  /*https://www.w3schools.com/howto/tryit.asp?filename=tryhow_js_sidenav*/
+  #comments_panel {
+    height: 100%;
+    width: 0;
+    position: fixed;
+    z-index: 1;
+    top: 0;
+    right: 0;
+    background-color: #dfdfdf;
+    /* overflow-x: hidden; */
+    overflow-y: scroll;
+    transition: 0.5s;
+    padding: 20px;
+  }
+  .comment {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 12px;
+    color: black;
+  }
+  .comment_replies > h1 {
+    text-align: left;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: small;
+    color: grey;
+  }
+
+  .reply_from {
+    display: flex;
+    flex-direction: row;
+    .reply_textbox {
+      width: 90%;
+      height: 20px;
+    }
+    .reply_submit {
+      width: 20px;
+      height: 20px;
+    }
+  }
+
+  /* #endregion Comments */
+
+  /* #region Header */
   /*set the max page width*/
   header,
   body {
@@ -471,6 +717,10 @@
     margin: 0px;
     padding: 0px;
   }
+
+  /* #endregion Header */
+
+  /* #region Feed Grid */
 
   /*horizontal lines*/
   .line_horizontal {
@@ -626,4 +876,5 @@ Based on examples by w3schools's Media Queries tutorial: https://www.w3schools.c
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     letter-spacing: 0.5px;
   }
+  /* #region Feed Grid */
 </style>

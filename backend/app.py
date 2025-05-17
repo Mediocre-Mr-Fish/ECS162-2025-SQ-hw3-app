@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, redirect, url_for, session
+from flask import Flask, jsonify, redirect, url_for, session, request
 from authlib.integrations.flask_client import OAuth
 from authlib.common.security import generate_token
 import os
@@ -9,9 +9,12 @@ app.secret_key = os.urandom(24)
 
 with open("debug_out.txt", "w") as f:
     f.write("DEBUG LOG\n")
-def debug_out(message:str):
+
+
+def debug_out(message: str):
     with open("debug_out.txt", "a") as f:
         f.write(str(message) + "\n")
+
 
 oauth = OAuth(app)
 
@@ -19,63 +22,246 @@ nonce = generate_token()
 
 
 oauth.register(
-    name=os.getenv('OIDC_CLIENT_NAME'),
-    client_id=os.getenv('OIDC_CLIENT_ID'),
-    client_secret=os.getenv('OIDC_CLIENT_SECRET'),
-    #server_metadata_url='http://dex:5556/.well-known/openid-configuration',
+    name=os.getenv("OIDC_CLIENT_NAME"),
+    client_id=os.getenv("OIDC_CLIENT_ID"),
+    client_secret=os.getenv("OIDC_CLIENT_SECRET"),
+    # server_metadata_url='http://dex:5556/.well-known/openid-configuration',
     authorization_endpoint="http://localhost:5556/auth",
     token_endpoint="http://dex:5556/token",
     jwks_uri="http://dex:5556/keys",
     userinfo_endpoint="http://dex:5556/userinfo",
     device_authorization_endpoint="http://dex:5556/device/code",
-    client_kwargs={'scope': 'openid email profile'}
+    client_kwargs={"scope": "openid email profile"},
 )
+
+
+class MongoWrapper:
+    def __init__(self, uri):
+        self.client = MongoClient(uri)
+
+    def getDatabase(self, dbName):
+        db = self.client[dbName]
+        return db
+
+    def getCollection(self, dbName, colName):
+        col = self.getDatabase(dbName)[colName]
+        return col
+
+    def insertDocument(self, dbName, colName, jsonObj):
+        return self.getCollection(dbName, colName).insert_one(jsonObj)
+
+    def findDocument(self, dbName, colName, jsonObj={}):
+        return self.getCollection(dbName, colName).find(jsonObj)
+
+
+class Comment:
+    def __init__(
+        self,
+        username: str,
+        useremail: str,
+        content: str,
+        articleID: str,
+        parentID: str = None,
+    ):
+        self.articleID: str = articleID
+        self.parentID: str = parentID
+        self.username: str = username
+        self.useremail: str = useremail
+        self.content: str = content
+
+    def toJson(self):
+        return {
+            "articleID": self.articleID,
+            "parentID": self.parentID,
+            "username": self.username,
+            "useremail": self.useremail,
+            "content": self.content,
+            "replies": [],
+        }
+
+
+DB_COMMENTS = "commentsdb"
+COL_COMMENTS = "comments"
+COL_USERS = "users"
+
+
+mongo = MongoWrapper(os.getenv("MONGO_URI"))
+def addTestComments(articleID):
+    exists = False
+    for c in mongo.findDocument(DB_COMMENTS, COL_COMMENTS, {"articleID": articleID}):
+        exists =True
+        break
+    if not exists:
+        test_comment_id = mongo.insertDocument(
+            DB_COMMENTS,
+            COL_COMMENTS,
+            Comment(
+                "Some User",
+                "someuser@mail",
+                "Hello World!",
+                articleID,
+            ).toJson(),
+        )
+        # debug_out(test_comment_id.inserted_id)
+        test_reply_id = mongo.insertDocument(
+            DB_COMMENTS,
+            COL_COMMENTS,
+            Comment(
+                "Other User",
+                "otheruser@mail",
+                "Hello to you too!",
+                articleID,
+                str(test_comment_id.inserted_id),
+            ).toJson(),
+        )
+        
+addTestComments("d38b9aef-ab20-51c2-883c-94aa475b7273")
+for c in mongo.findDocument(DB_COMMENTS, COL_COMMENTS):
+    debug_out(dict(c))
+
+
+def initalizeUsersDB():
+    exists = False
+    for c in mongo.findDocument(DB_COMMENTS, COL_USERS):
+        exists = True
+        break
+    if not exists:
+        debug_out("Creating Users DB")
+        users = [
+            {
+                "email": "admin@hw3.com",
+                "hash": "$2b$10$8NoCpIs/Z6v0s/pU9YxYIO10uWyhIVOS2kmNac9AD0HsqRhP5dUie",
+                "username": "admin",
+                "userID": "123",
+            },
+            {
+                "email": "moderator@hw3.com",
+                "hash": "$2b$12$2aaoZyVjMWvoCq.DmCUECOGoW0oaBCyzSluUm3BpLrP26sVT71PSC",
+                "username": "moderator",
+                "userID": "456",
+            },
+            {
+                "email": "user@hw3.com",
+                "hash": "$2b$12$321HomfT164U9f5l.xQaYuHThGCss8PRPNy8t./tq8Frgr6UYeEka",
+                "username": "user",
+                "userID": "789",
+            },
+        ]
+        for u in users:
+            mongo.insertDocument(DB_COMMENTS, COL_USERS, u)
+
+
+initalizeUsersDB()
 
 # @app.route('/api/key')
 # def get_key():
 #     return jsonify({'apiKey': os.getenv('NYT_API_KEY')})
 
-@app.route('/api/articles-query/<int:page>/<string:query>')
-def fetch_article_query(page:int, query:str):
-    key = os.getenv('NYT_API_KEY')
-    return redirect(f"https://api.nytimes.com/svc/search/v2/articlesearch.json?q={query}&api-key={key}&page={page}", code=302)
 
-@app.route('/api/articles-filter/<int:page>/<string:filter>')
-def fetch_article_filter(page:int, filter:str):
-    key = os.getenv('NYT_API_KEY')
-    filter = filter.replace(":","%3A")
-    debug_out(f"https://api.nytimes.com/svc/search/v2/articlesearch.json?fq={filter}&api-key={key}&page={page}")
-    return redirect(f"https://api.nytimes.com/svc/search/v2/articlesearch.json?fq={filter}&api-key={key}&page={page}", code=302)
+@app.route("/api/articles-query/<int:page>/<string:query>")
+def fetch_article_query(page: int, query: str):
+    key = os.getenv("NYT_API_KEY")
+    return redirect(
+        f"https://api.nytimes.com/svc/search/v2/articlesearch.json?q={query}&api-key={key}&page={page}",
+        code=302,
+    )
 
 
-@app.route('/')
+@app.route("/api/articles-filter/<int:page>/<string:filter>")
+def fetch_article_filter(page: int, filter: str):
+    key = os.getenv("NYT_API_KEY")
+    filter = filter.replace(":", "%3A")
+    return redirect(
+        f"https://api.nytimes.com/svc/search/v2/articlesearch.json?fq={filter}&api-key={key}&page={page}",
+        code=302,
+    )
+
+
+@app.route("/api/comments/<string:articleid>")
+def getComments(articleid: str):
+    try:
+        comments = {}
+        queued = {}
+        for c in list(
+            mongo.findDocument("commentsdb", "comments", {"articleID": articleid})
+        ):
+            d = dict(c)
+            _id = str(d["_id"])
+            d["_id"] = _id
+            if d["parentID"]:
+                queued[_id] = d
+            else:
+                comments[_id] = d
+
+        for _id, d in queued.items():
+            pid = d["parentID"]
+            comments[pid]["replies"].append(d)
+
+        return jsonify({"comments": list(comments.values())})
+    except Exception as e:
+        return jsonify({"Internal error": str(e)})
+
+
+@app.route("/api/postcomment", methods=["POST"])
+def postComment():
+    data = request.form
+    debug_out("Posting Comment")
+    debug_out(data)
+    username = None
+    for u in mongo.findDocument(DB_COMMENTS, COL_USERS, {"email": data["email"]}):
+        username = u["username"]
+
+    parentID = data["parentID"]
+    if not parentID:
+        parentID = None
+    mongo.insertDocument(
+        DB_COMMENTS,
+        COL_COMMENTS,
+        Comment(
+            username=username,
+            useremail=data["email"],
+            content=data["content"],
+            articleID=data["articleID"],
+            parentID=parentID,
+        ).toJson(),
+    )
+    return jsonify({"status": "ok"})
+
+
+@app.route("/")
 def home():
-    user = session.get('user')
+    user = session.get("user")
     if user:
-        return f"<h2>Logged in as {user['email']}</h2><a href='/logout'>Logout</a>"
-    return '<a href="/login">Login with Dex</a>'
+        # return f"<h2>Logged in as {user['email']}</h2><a href='/logout'>Logout</a>"
+        return redirect(f"http://localhost:5173/?email={user['email']}")
+    # return '<a href="/login">Login with Dex</a>'
+    return redirect(f"http://localhost:5173")
 
-@app.route('/login')
+
+@app.route("/login")
 def login():
-    session['nonce'] = nonce
-    redirect_uri = 'http://localhost:8000/authorize'
+    session["nonce"] = nonce
+    redirect_uri = "http://localhost:8000/authorize"
     return oauth.flask_app.authorize_redirect(redirect_uri, nonce=nonce)
 
-@app.route('/authorize')
+
+@app.route("/authorize")
 def authorize():
     token = oauth.flask_app.authorize_access_token()
-    nonce = session.get('nonce')
+    nonce = session.get("nonce")
 
-    user_info = oauth.flask_app.parse_id_token(token, nonce=nonce)  # or use .get('userinfo').json()
-    session['user'] = user_info
-    return redirect('/')
+    user_info = oauth.flask_app.parse_id_token(
+        token, nonce=nonce
+    )  # or use .get('userinfo').json()
+    session["user"] = user_info
+    return redirect("/")
 
-@app.route('/logout')
+
+@app.route("/logout")
 def logout():
     session.clear()
-    return redirect('/')
-
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8000)
+    return redirect("/")
 
 
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=8000)
