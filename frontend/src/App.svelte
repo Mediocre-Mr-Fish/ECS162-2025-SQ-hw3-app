@@ -3,6 +3,7 @@
   import { onMount } from "svelte";
   import nytLogo from "./assets/nyt.svg";
   import searchIcon from "./assets/search_icon.svg";
+  import xIcon from "./assets/x-symbol-svgrepo-com.svg";
 
   console.log("Hello World!");
 
@@ -537,7 +538,7 @@
 
     //https://www.w3schools.com/howto/tryit.asp?filename=tryhow_js_sidenav
     let comments_panel = document.getElementById("comments_panel")!;
-    comments_panel.style.width = "250px";
+    comments_panel.style.transform = "translateX(0)"; //comments_panel.style.width = "250px";
 
     if (lastOpenedComments === articleID) {
       // don't rerender comments
@@ -586,7 +587,8 @@
     }
   }
   async function closeComments() {
-    document.getElementById("comments_panel")!.style.width = "0px";
+    document.getElementById("comments_panel")!.style.transform = "translateX(100%)";
+    //document.getElementById("comments_panel")!.style.width = "0px";
   }
   // #endregion Panel Mechanics
 
@@ -961,13 +963,20 @@
   <section id="comments_panel">
     <h1 hidden>Comments Pannel</h1>
     <div id="comments_panel_header">
-      <button id="comments_panel_closebutton" onclick={closeComments}>
-        close
-      </button>
       {#if email}
-        <p>{email}</p>
+        <div class="header_loggedin_row">
+          <button id="comments_panel_closebutton" class="comments_header_button transparent_button" onclick={closeComments}>
+            <img src={xIcon} alt="Minimize" class="minimize_icon" />
+          </button>
+          <p class="header_email">{email}</p>
+        </div>
       {:else}
-        <button onclick={redirectToLogin}>Login</button>
+        <div class="header_loggedin_row">
+          <button id="comments_panel_closebutton" class="comments_header_button transparent_button" onclick={closeComments}>
+            <img src={xIcon} alt="Minimize" class="minimize_icon" />
+          </button>
+          <button class="comments_header_button" onclick={redirectToLogin}>Login</button>
+        </div>
       {/if}
     </div>
     <form class="comment_form">
@@ -1005,7 +1014,7 @@
         <a class="feed_readtime">
           The read time, as calculated from word count.
         </a>
-        <button>
+        <button class="article_comment_button">
           Comments
           <p hidden>article ID</p>
         </button>
@@ -1069,7 +1078,7 @@
   /*https://www.w3schools.com/howto/tryit.asp?filename=tryhow_js_sidenav*/
   #comments_panel {
     height: 100svh;
-    width: 0;
+    width: 250px; /* width: 0; */
     position: -webkit-sticky;
     position: fixed;
     z-index: 1;
@@ -1078,7 +1087,12 @@
     background-color: #dfdfdf;
     overflow-y: auto;
     transition: 0.5s;
+    transform: translateX(100%);   /* Testing this */
     margin: 0;
+
+    /* Does this tackle the squishing */
+    display: flex;
+    flex-direction: column;
 
     div,
     section {
@@ -1140,6 +1154,115 @@
     border-width: 1px;
   }
 
+  .comments_header_button {
+    background-color: #567b95;
+    color: white;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: medium;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 25px;
+    margin: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+
+  .comments_header_button:hover {
+    background-color: #326891;
+  }
+
+  .header_loggedin_row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  }
+
+  .header_email {
+    font-size: 1.0em;
+    /* font-weight: bold; Ends up, this is super ugly */
+    margin: 0;
+  }
+
+
+  /* (comment: NEW! Style for comment Post and Remove buttons) */
+  .comment_submit,
+  .reply_submit,
+  .button_remove {
+    background-color: #567b95;
+    color: white;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: medium;
+    line-height: 1.2; /* NEW: Ensures better vertical centering */
+    border: none;
+    border-radius: 8px;
+    padding: 10px 25px;
+    margin: 5px 0px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    display: inline-flex;       /* NEW: use flexbox */
+    align-items: center;        /* NEW: vertically center text */
+    justify-content: center;    /* NEW: horizontally center text */
+  }
+
+  .comment_submit:hover,
+  .reply_submit:hover,
+  .button_remove:hover {
+    background-color: #326891;
+  }
+  /* (comment: END SECTION #) */
+                              /* (END SECTION) */
+
+
+    /* (comment: NEW! Style for 'Comments' button under each article) */
+  .article_comment_button {
+    background-color: #567b95;
+    color: white;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: small;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    margin-top: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+
+  .article_comment_button:hover {
+    background-color: #326891;
+  }
+
+    .minimize_icon {
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+  }
+
+  /* The comment button aesthetic changes*/
+
+  .comments_header_button.transparent_button {
+    background-color: transparent;
+    border: none;
+    padding: 5px;
+    box-shadow: none;
+  }
+
+  .minimize_icon {
+    width: 20px;
+    height: 20px;
+    display: block;
+  }
+
+  /* (comment: END SECTION #) */
+
+  /*formatting for the article content*/
+  .feed_main {
+    font-size: small;
+    color: #5a5a5a;
+    padding: 0px 10px 0px 10px;
+    text-align: left;
+    line-height: 20px;
+  }
   /* #endregion Comments */
 
   /* #region Header */
