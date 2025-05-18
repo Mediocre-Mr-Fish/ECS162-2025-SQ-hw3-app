@@ -86,10 +86,12 @@ COL_USERS = "users"
 
 
 mongo = MongoWrapper(os.getenv("MONGO_URI"))
+
+
 def addTestComments(articleID):
     exists = False
     for c in mongo.findDocument(DB_COMMENTS, COL_COMMENTS, {"articleID": articleID}):
-        exists =True
+        exists = True
         break
     if not exists:
         test_comment_id = mongo.insertDocument(
@@ -114,7 +116,8 @@ def addTestComments(articleID):
                 str(test_comment_id.inserted_id),
             ).toJson(),
         )
-        
+
+
 addTestComments("d38b9aef-ab20-51c2-883c-94aa475b7273")
 for c in mongo.findDocument(DB_COMMENTS, COL_COMMENTS):
     debug_out(dict(c))
@@ -204,28 +207,37 @@ def getComments(articleid: str):
 
 @app.route("/api/postcomment", methods=["POST"])
 def postComment():
-    data = request.form
-    debug_out("Posting Comment")
-    debug_out(data)
-    username = None
-    for u in mongo.findDocument(DB_COMMENTS, COL_USERS, {"email": data["email"]}):
-        username = u["username"]
+    try:
+        data = request.form
+        debug_out("Posting Comment")
+        debug_out(data)
 
-    parentID = data["parentID"]
-    if not parentID:
-        parentID = None
-    mongo.insertDocument(
-        DB_COMMENTS,
-        COL_COMMENTS,
-        Comment(
+        username = None
+        for u in mongo.findDocument(DB_COMMENTS, COL_USERS, {"email": data["email"]}):
+            username = u["username"]
+
+        parentID = data["parentID"]
+        if not parentID:
+            parentID = None
+
+        commentData = Comment(
             username=username,
             useremail=data["email"],
             content=data["content"],
             articleID=data["articleID"],
             parentID=parentID,
-        ).toJson(),
-    )
-    return jsonify({"status": "ok"})
+        ).toJson()
+
+        mongo.insertDocument(
+            DB_COMMENTS,
+            COL_COMMENTS,
+            commentData.copy(),
+        )
+        debug_out(commentData)
+        return jsonify({"status": "ok", "commentData": commentData})
+    except Exception as e:
+        raise e
+        return jsonify({"Internal error": str(e)})
 
 
 @app.route("/")

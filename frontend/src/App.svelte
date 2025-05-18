@@ -1,4 +1,5 @@
 <script lang="ts">
+  // #region Script
   import { onMount } from "svelte";
   import nytLogo from "./assets/nyt.svg";
   import searchIcon from "./assets/search_icon.svg";
@@ -410,6 +411,13 @@
     return newReply;
   }
 
+  function getTemplate(template_name_id: string) {
+    return <HTMLElement>(
+      (<HTMLTemplateElement>document.getElementById(template_name_id)!).content
+        .children[0]
+    );
+  }
+
   async function openComments(this: HTMLButtonElement) {
     const articleID = this.children[0].textContent!;
 
@@ -418,14 +426,22 @@
     //https://www.w3schools.com/howto/tryit.asp?filename=tryhow_js_sidenav
     let comments_panel = document.getElementById("comments_panel")!;
     comments_panel.style.width = "250px";
+
     if (lastOpenedComments === articleID) {
       // don't rerender comments
     } else {
       lastOpenedComments = articleID;
-      
+
       const comments_list = document.getElementById("comments_list")!;
       while (comments_list.children.length > 0) {
         comments_list.children[0].remove();
+      }
+
+      //comment_form
+      {
+        let form = <HTMLFormElement>comments_panel.children[2];
+        form.addEventListener("submit", postComment);
+        form.children[2].textContent = articleID;
       }
 
       let comments = null;
@@ -440,14 +456,8 @@
         return;
       }
 
-      const commentTemplate = <HTMLElement>(
-        (<HTMLTemplateElement>document.getElementById("template_comment")!)
-          .content.children[0]
-      );
-      const replyTemplate = <HTMLElement>(
-        (<HTMLTemplateElement>document.getElementById("template_reply")!)
-          .content.children[0]
-      );
+      const commentTemplate = getTemplate("template_comment");
+      const replyTemplate = getTemplate("template_reply");
 
       for (let index = 0; index < comments.length; index++) {
         comments_list.appendChild(
@@ -471,7 +481,7 @@
     articleID: string,
     parentID: string,
     content: string,
-  ) {
+  ): Promise<any | null> {
     try {
       let data = new FormData();
       data.append("articleID", articleID);
@@ -479,12 +489,17 @@
       data.append("email", email);
       data.append("content", content);
 
-      await fetch("/api/postcomment", {
+      const res = await fetch("/api/postcomment", {
         method: "POST",
         body: data,
       });
+      const res_data = await res.json();
+      console.log(res_data);
+
+      return res_data;
     } catch (error) {
-      console.log("Failed to post reply.");
+      console.log("Failed to post reply: " + error);
+      return null;
     }
   }
   async function postReply(e: SubmitEvent) {
@@ -500,13 +515,56 @@
 
     const articleID = form.children[2].textContent!;
     const commentID = form.children[3].textContent!;
-    postCommentCall(articleID, commentID, reply_body);
-    //console.log(reply_body);
+    try {
+      const newCommentData = await postCommentCall(
+        articleID,
+        commentID,
+        reply_body,
+      );
+      const newCommentJson = newCommentData.commentData; //await newCommentData.json();
+
+      const existing_replies_list = form.parentElement!.children[2]!;
+      existing_replies_list.appendChild(
+        renderReply(getTemplate("template_reply"), newCommentJson),
+      );
+      reply_box.value = "";
+    } catch (error) {}
+  }
+
+  async function postComment(e: SubmitEvent) {
+    e.preventDefault();
+    if (!email) {
+      redirectToLogin();
+      return;
+    }
+
+    const form = <HTMLElement>e.target!;
+    const comment_box = <HTMLInputElement>form.children[0];
+    const comment_body = comment_box.value;
+
+    const articleID = form.children[2].textContent!;
+    try {
+      const newCommentData = await postCommentCall(articleID, "", comment_body);
+      const newCommentJson = newCommentData.commentData; //await newCommentData.json();
+
+      const existing_comments_list = form.parentElement!.children[3]!;
+      existing_comments_list.appendChild(
+        renderComment(
+          getTemplate("template_comment"),
+          newCommentJson,
+          articleID,
+          getTemplate("template_reply"),
+        ),
+      );
+      comment_box.value = "";
+    } catch (error) {}
   }
   // #endregion Comments
+  // #endregion Script
 </script>
 
 <main>
+  <!-- #region HTML -->
   <!--The New York Times front page mock-up made by Ellison Song and Sean Singleton
   Ellison Song: ellsong@ucdavis.edu
   Sean Singleton: ssingleton@ucdavis.edu
@@ -559,6 +617,11 @@
         <button onclick={redirectToLogin}>Login</button>
       {/if}
     </div>
+    <form class="comment_form">
+      <input class="comment_textbox" type="text" />
+      <button class="comment_submit">Post</button>
+      <p hidden>ARTICLE_ID</p>
+    </form>
     <section id="comments_list">
       <h1>Comments</h1>
       <!-- Commnets go here! -->
@@ -612,6 +675,7 @@
         <p hidden>ARTICLE_ID</p>
         <p hidden>COMMENT_ID</p>
       </form>
+      <div class="line_horizontal"></div>
     </div>
   </template>
 
@@ -621,47 +685,83 @@
       <p class="reply_body">Repy Body</p>
     </div>
   </template>
+  <!-- #endregion HTML -->
 </main>
 
 <style>
+  /* #region Style */
+
   /* #region Comments */
   /*https://www.w3schools.com/howto/tryit.asp?filename=tryhow_js_sidenav*/
   #comments_panel {
-    height: 100%;
+    height: 100svh;
     width: 0;
+    position: -webkit-sticky;
     position: fixed;
     z-index: 1;
     top: 0;
     right: 0;
     background-color: #dfdfdf;
-    /* overflow-x: hidden; */
-    overflow-y: scroll;
+    overflow-y: auto;
     transition: 0.5s;
-    padding: 20px;
+    margin: 0;
+
+    div,
+    section {
+      padding: 5px;
+    }
   }
-  .comment {
-    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    font-size: 12px;
-    color: black;
-  }
-  .comment_replies > h1 {
+
+  .comment,
+  .reply {
     text-align: left;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: medium;
+    color: black;
+    margin: 0;
+    border: 0;
+
+    .comment_username,
+    .reply_username {
+      margin: 0;
+      padding: 1px;
+    }
+    .comment_body,
+    .reply_body {
+      font-size: small;
+      margin: 0;
+      padding: 1px;
+    }
+    .line_horizontal {
+      border-color: grey;
+      border-width: 0px 0px 1px 0px;
+    }
+  }
+
+  .comment_replies > h1 {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: small;
     color: grey;
   }
 
+  .comment_from,
   .reply_from {
     display: flex;
     flex-direction: row;
-    .reply_textbox {
-      width: 90%;
-      height: 20px;
-    }
-    .reply_submit {
-      width: 20px;
-      height: 20px;
-    }
+  }
+  .comment_textbox,
+  .reply_textbox {
+    flex-grow: 1;
+    height: 20px;
+    padding: 2px;
+    border-width: 1px;
+  }
+  .comment_submit,
+  .reply_submit {
+    flex-grow: 1;
+    height: 27.2px;
+    padding: 2px;
+    border-width: 1px;
   }
 
   /* #endregion Comments */
@@ -876,5 +976,6 @@ Based on examples by w3schools's Media Queries tutorial: https://www.w3schools.c
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     letter-spacing: 0.5px;
   }
-  /* #region Feed Grid */
+  /* #endregion Feed Grid */
+  /* #endregion Style */
 </style>
