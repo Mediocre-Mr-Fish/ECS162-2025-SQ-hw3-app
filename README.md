@@ -29,7 +29,7 @@ I have asked the TAs about login security, and they have explicitly stated that 
 
 Articles fetched are, by default, filtered to the Davis/Sacramento area using NYT's tagging system. All articles included have a `Location` tag of `Davis (Calif)` or `Sacramento (Calif)`.
 
-![alt text](README/location_tag.png)
+![Screenshot of browser console. A response JSON object is shown. Dropdowns are expanded to show more information. Under [response/docs/0/keywords/4], a JSON object associates [name:'Location'] with [value:'Sacramento (Calif)']](readme_src/location_tag.png)
 
 When searching for articles using the search bar, this default filter is overriden.
 
@@ -45,4 +45,4 @@ By default, it only adds these comments to the article "[We Mapped Heat in 3 U.S
 
 To add sample comments to a different article, the article ID can be changed. To find the ID of an article, it can be viewed in the consle. 
 
-![alt text](image.png)
+![Screenshot of browser console. A response JSON object is shown. Dropdowns are expanded to show more information. Under [response/docs/0], [_id: "nyt://interactive/d38b9aef-ab20-51c2-883c-94aa475b7273"] is hovered over. [d38b9aef-ab20-51c2-883c-94aa475b7273] is highlighted.](readme_src/article_id.png)
