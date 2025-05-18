@@ -22,7 +22,7 @@
   // #region Initialization
 
   let email = "";
-  let userPermissions: any = null;
+  let userPermissions: any = {};
   onMount(async () => {
     const url = new URL(window.location.href);
     const em = url.searchParams.get("email");
@@ -353,6 +353,7 @@
 
   // #region Comments
 
+  // json object containing indexes for html elements
   const COMMENT_STRUCT = {
     PANEL: {
       comments_panel_header: 1,
@@ -369,12 +370,19 @@
       comment_id: 1,
       comment_username: 2,
       comment_body: 3,
-      mod_actions: 4,
-      comment_replies: 5,
-      reply_form: 6,
-      line_horizontal: 7,
+      comment_body_textarea: 4,
+      mod_actions: 5,
+      comment_replies: 6,
+      reply_form: 7,
+      line_horizontal: 8,
       MOD_ACTIONS: {
-        button_remove: 0,
+        mod_actions_directions: 0,
+        button_remove: 1,
+        button_redact: 2,
+        button_remove_confirm: 3,
+        button_remove_cancel: 4,
+        button_redact_confirm: 5,
+        button_redact_cancel: 6,
       },
       REPLY_FORM: {
         reply_textbox: 0,
@@ -385,24 +393,24 @@
       reply_id: 0,
       reply_username: 1,
       reply_body: 2,
+      reply_body_textarea: 3,
+      mod_actions: 4,
+      MOD_ACTIONS: {
+        mod_actions_directions: 0,
+        button_remove: 1,
+        button_redact: 2,
+        button_remove_confirm: 3,
+        button_remove_cancel: 4,
+        button_redact_confirm: 5,
+        button_redact_cancel: 6,
+      },
     },
   };
-
+  /**
+   *
+   */
   function redirectToLogin() {
     window.location.href = "http://localhost:8000/login";
-  }
-  async function BUTTON() {
-    window.location.href = "http://localhost:8000/login";
-    return;
-    try {
-      console.log("BUTTON");
-      const res = await fetch("/login");
-      const data = await res.json();
-      console.log(data);
-    } catch (error) {
-      console.error("data.AAAAAAA: ", error);
-      return "";
-    }
   }
 
   // #region Render
@@ -431,15 +439,22 @@
 
     //mod_actions
     {
-      if (userPermissions.can_remove_comments) {
+      if (userPermissions.can_remove_comments && !commentJson.removed) {
         const mod_actions = <HTMLDivElement>(
           newComment.children[COMMENT_STRUCT.COMMENT.mod_actions]
         );
         mod_actions.hidden = false;
-        const button_remove = <HTMLButtonElement>(
-          mod_actions.children[COMMENT_STRUCT.COMMENT.MOD_ACTIONS.button_remove]
-        );
-        button_remove.onclick = removeComment;
+        function setButton(key: string, callback: Function) {
+          (<HTMLButtonElement>(
+            mod_actions.children[COMMENT_STRUCT.COMMENT.MOD_ACTIONS[key]]
+          )).onclick = callback;
+        }
+        setButton("button_remove", callback_button_remove);
+        setButton("button_remove_confirm", callback_button_remove_confirm);
+        setButton("button_remove_cancel", callback_button_remove_cancel);
+        setButton("button_redact", callback_button_redact);
+        setButton("button_redact_confirm", callback_button_redact_confirm);
+        setButton("button_redact_cancel", callback_button_redact_cancel);
       }
     }
 
@@ -469,6 +484,11 @@
     replyJson: any,
   ): HTMLElement {
     let newReply = <HTMLElement>replyTemplate.cloneNode(true);
+
+    //reply_id
+    newReply.children[COMMENT_STRUCT.REPLY.reply_id].textContent =
+      replyJson._id;
+
     //reply_username
     newReply.children[COMMENT_STRUCT.REPLY.reply_username].textContent =
       replyJson.username;
@@ -476,6 +496,28 @@
     //reply_body
     newReply.children[COMMENT_STRUCT.REPLY.reply_body].textContent =
       replyJson.content;
+
+    //mod_actions
+    {
+      if (userPermissions.can_remove_comments && !replyJson.removed) {
+        const mod_actions = <HTMLDivElement>(
+          newReply.children[COMMENT_STRUCT.REPLY.mod_actions]
+        );
+        mod_actions.hidden = false;
+        function setButton(key: string, callback: Function) {
+          (<HTMLButtonElement>(
+            mod_actions.children[COMMENT_STRUCT.COMMENT.MOD_ACTIONS[key]]
+          )).onclick = callback;
+        }
+        setButton("button_remove", callback_button_remove);
+        setButton("button_remove_confirm", callback_button_remove_confirm);
+        setButton("button_remove_cancel", callback_button_remove_cancel);
+        setButton("button_redact", callback_button_redact);
+        setButton("button_redact_confirm", callback_button_redact_confirm);
+        setButton("button_redact_cancel", callback_button_redact_cancel);
+      }
+    }
+
     return newReply;
   }
 
@@ -596,7 +638,30 @@
       return null;
     }
   }
+  async function redactCommentCall(
+    commentID: string,
+    startIndex: number,
+    endIndex: number,
+  ) {
+    try {
+      let data = new FormData();
+      data.append("commentID", commentID);
+      data.append("startIndex", startIndex.toString());
+      data.append("endIndex", endIndex.toString());
 
+      const res = await fetch("/api/redactcomment", {
+        method: "POST",
+        body: data,
+      });
+      const res_data = await res.json();
+      console.log(res_data);
+
+      return res_data;
+    } catch (error) {
+      console.log("Failed to redact comment: " + error);
+      return null;
+    }
+  }
   async function postReply(e: SubmitEvent) {
     e.preventDefault();
     if (!email) {
@@ -633,7 +698,6 @@
       reply_box.value = "";
     }
   }
-
   async function postComment(e: SubmitEvent) {
     e.preventDefault();
     if (!email) {
@@ -669,17 +733,186 @@
     }
   }
 
-  async function removeComment(this: HTMLButtonElement) {
-    const thisComment = <HTMLDivElement>this.parentElement!.parentElement;
-    const commentID =
-      thisComment.children[COMMENT_STRUCT.COMMENT.comment_id].textContent!;
+  // #region Mod Actions
+  const MOD_ACTIONS_ARRANGEMENT = {
+    idle: {
+      mod_actions_directions: "",
+      button_remove: true,
+      button_redact: true,
+      button_remove_confirm: false,
+      button_remove_cancel: false,
+      button_redact_confirm: false,
+      button_redact_cancel: false,
+    },
+    removing: {
+      mod_actions_directions: "Remove comment?",
+      button_remove: false,
+      button_redact: false,
+      button_remove_confirm: true,
+      button_remove_cancel: true,
+      button_redact_confirm: false,
+      button_redact_cancel: false,
+    },
+    redacting: {
+      mod_actions_directions: "Select text to redact",
+      button_remove: false,
+      button_redact: false,
+      button_remove_confirm: false,
+      button_remove_cancel: false,
+      button_redact_confirm: true,
+      button_redact_cancel: true,
+    },
+    removed: {
+      mod_actions_directions: "",
+      button_remove: false,
+      button_redact: false,
+      button_remove_confirm: false,
+      button_remove_cancel: false,
+      button_redact_confirm: false,
+      button_redact_cancel: false,
+    },
+  };
+  function arrange_mod_actions(
+    mod_actions: HTMLDivElement,
+    structure: any,
+    arrangement: any,
+  ) {
+    mod_actions.children[structure.mod_actions_directions].textContent =
+      arrangement.mod_actions_directions;
+
+    const buttons = [
+      "button_remove",
+      "button_redact",
+      "button_remove_confirm",
+      "button_remove_cancel",
+      "button_redact_confirm",
+      "button_redact_cancel",
+    ];
+    buttons.forEach((button: string) => {
+      (<HTMLButtonElement>mod_actions.children[structure[button]]).hidden =
+        !arrangement[button];
+    });
+  }
+
+  async function callback_button_remove(this: HTMLButtonElement) {
+    const mod_actions = <HTMLDivElement>this.parentElement!;
+    const thisComment = <HTMLDivElement>mod_actions.parentElement!;
+    let structure = COMMENT_STRUCT.COMMENT.MOD_ACTIONS;
+    if (thisComment.classList.contains("reply")) {
+      structure = COMMENT_STRUCT.REPLY.MOD_ACTIONS;
+    }
+    arrange_mod_actions(
+      mod_actions,
+      structure,
+      MOD_ACTIONS_ARRANGEMENT.removing,
+    );
+  }
+  async function callback_button_remove_confirm(this: HTMLButtonElement) {
+    const mod_actions = <HTMLDivElement>this.parentElement!;
+    const thisComment = <HTMLDivElement>mod_actions.parentElement!;
+    let structure = COMMENT_STRUCT.COMMENT.MOD_ACTIONS;
+    let struct_id = COMMENT_STRUCT.COMMENT.comment_id;
+    let struct_body = COMMENT_STRUCT.COMMENT.comment_body;
+    if (thisComment.classList.contains("reply")) {
+      structure = COMMENT_STRUCT.REPLY.MOD_ACTIONS;
+      struct_id = COMMENT_STRUCT.REPLY.reply_id;
+      struct_body = COMMENT_STRUCT.REPLY.reply_body;
+    }
+    arrange_mod_actions(
+      mod_actions,
+      structure,
+      MOD_ACTIONS_ARRANGEMENT.removed,
+    );
+
+    const commentID = thisComment.children[struct_id].textContent!;
 
     const newCommentData = await removeCommentCall(commentID);
     const newCommentJson = newCommentData.commentData;
 
-    thisComment.children[COMMENT_STRUCT.COMMENT.comment_body].textContent =
-      newCommentJson.content;
+    thisComment.children[struct_body].textContent = newCommentJson.content;
   }
+  async function callback_button_remove_cancel(this: HTMLButtonElement) {
+    const mod_actions = <HTMLDivElement>this.parentElement!;
+    const thisComment = <HTMLDivElement>mod_actions.parentElement!;
+    let structure = COMMENT_STRUCT.COMMENT.MOD_ACTIONS;
+    if (thisComment.classList.contains("reply")) {
+      structure = COMMENT_STRUCT.REPLY.MOD_ACTIONS;
+    }
+    arrange_mod_actions(mod_actions, structure, MOD_ACTIONS_ARRANGEMENT.idle);
+  }
+
+  async function callback_button_redact(this: HTMLButtonElement) {
+    const mod_actions = <HTMLDivElement>this.parentElement!;
+    const thisComment = <HTMLDivElement>mod_actions.parentElement!;
+    let structure = COMMENT_STRUCT.COMMENT.MOD_ACTIONS;
+    let struct_body = COMMENT_STRUCT.COMMENT.comment_body;
+    let struct_textarea = COMMENT_STRUCT.COMMENT.comment_body_textarea;
+    if (thisComment.classList.contains("reply")) {
+      structure = COMMENT_STRUCT.REPLY.MOD_ACTIONS;
+      struct_body = COMMENT_STRUCT.REPLY.reply_body;
+      struct_textarea = COMMENT_STRUCT.REPLY.reply_body_textarea;
+    }
+    arrange_mod_actions(
+      mod_actions,
+      structure,
+      MOD_ACTIONS_ARRANGEMENT.redacting,
+    );
+
+    const body = <HTMLParagraphElement>thisComment.children[struct_body];
+    const textarea = <HTMLTextAreaElement>thisComment.children[struct_textarea];
+
+    body.hidden = true;
+    textarea.hidden = false;
+    textarea.textContent = body.textContent;
+  }
+  async function callback_button_redact_confirm(this: HTMLButtonElement) {
+    const mod_actions = <HTMLDivElement>this.parentElement!;
+    const thisComment = <HTMLDivElement>mod_actions.parentElement!;
+    let structure = COMMENT_STRUCT.COMMENT.MOD_ACTIONS;
+    let struct_id = COMMENT_STRUCT.COMMENT.comment_id;
+    let struct_textarea = COMMENT_STRUCT.COMMENT.comment_body_textarea;
+    if (thisComment.classList.contains("reply")) {
+      structure = COMMENT_STRUCT.REPLY.MOD_ACTIONS;
+      struct_id = COMMENT_STRUCT.REPLY.reply_id;
+      struct_textarea = COMMENT_STRUCT.REPLY.reply_body_textarea;
+    }
+    const textarea = <HTMLTextAreaElement>(
+      thisComment.children[struct_textarea]!
+    );
+    const sStart = textarea.selectionStart;
+    const sEnd = textarea.selectionEnd;
+    console.log(textarea.textContent!.slice(sStart, sEnd));
+
+    const commentID = thisComment.children[struct_id].textContent!;
+
+    const newCommentData = await redactCommentCall(commentID, sStart, sEnd);
+    const newCommentJson = newCommentData.commentData;
+
+    thisComment.children[struct_textarea].textContent = newCommentJson.content;
+  }
+  async function callback_button_redact_cancel(this: HTMLButtonElement) {
+    const mod_actions = <HTMLDivElement>this.parentElement!;
+    const thisComment = <HTMLDivElement>mod_actions.parentElement!;
+    let structure = COMMENT_STRUCT.COMMENT.MOD_ACTIONS;
+    let struct_body = COMMENT_STRUCT.COMMENT.comment_body;
+    let struct_textarea = COMMENT_STRUCT.COMMENT.comment_body_textarea;
+    if (thisComment.classList.contains("reply")) {
+      structure = COMMENT_STRUCT.REPLY.MOD_ACTIONS;
+      struct_body = COMMENT_STRUCT.REPLY.reply_body;
+      struct_textarea = COMMENT_STRUCT.REPLY.reply_body_textarea;
+    }
+    arrange_mod_actions(mod_actions, structure, MOD_ACTIONS_ARRANGEMENT.idle);
+
+    const body = <HTMLParagraphElement>thisComment.children[struct_body];
+    const textarea = <HTMLTextAreaElement>thisComment.children[struct_textarea];
+
+    textarea.hidden = true;
+    body.hidden = false;
+    body.textContent = textarea.textContent;
+  }
+
+  // #endregion Mod Actions
+
   // #endregion Post Mechanics
   // #endregion Comments
   // #endregion Script
@@ -724,8 +957,6 @@
     </section>
     <div class="line_horizontal_double"></div>
   </header>
-
-  <button onclick={BUTTON}>BUTTON</button>
 
   <section id="comments_panel">
     <h1 hidden>Comments Pannel</h1>
@@ -789,8 +1020,15 @@
       <p hidden>COMMENT_ID</p>
       <p class="comment_username">Commenter Username</p>
       <p class="comment_body">Comment Body</p>
+      <textarea hidden readonly class="comment_body">Comment Body</textarea>
       <div class="mod_actions" hidden>
-        <button class="button_remove"> Remove Comment </button>
+        <p class="mod_actions_directions"></p>
+        <button class="button_remove">Remove</button>
+        <button class="button_redact">Redact</button>
+        <button class="button_remove_confirm" hidden>Yes</button>
+        <button class="button_remove_cancel" hidden>No</button>
+        <button class="button_redact_confirm" hidden>Redact</button>
+        <button class="button_redact_cancel" hidden>Done</button>
       </div>
       <section class="comment_replies">
         <h1>Replies</h1>
@@ -809,6 +1047,16 @@
       <p hidden>REPLY_ID</p>
       <p class="reply_username">Replier Username</p>
       <p class="reply_body">Reply Body</p>
+      <textarea hidden readonly class="reply_body">Reply Body</textarea>
+      <div class="mod_actions" hidden>
+        <p class="mod_actions_directions"></p>
+        <button class="button_remove">Remove</button>
+        <button class="button_redact">Redact</button>
+        <button class="button_remove_confirm" hidden>Yes</button>
+        <button class="button_remove_cancel" hidden>No</button>
+        <button class="button_redact_confirm" hidden>Redact</button>
+        <button class="button_redact_cancel" hidden>Done</button>
+      </div>
     </div>
   </template>
   <!-- #endregion HTML -->
@@ -863,7 +1111,9 @@
       border-width: 0px 0px 1px 0px;
     }
   }
-
+  .mod_actions > button {
+    font-size: small;
+  }
   .comment_replies > h1 {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: small;

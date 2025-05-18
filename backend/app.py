@@ -52,6 +52,9 @@ class MongoWrapper:
         return self.getCollection(dbName, colName).insert_one(jsonObj)
 
     def findDocument(self, dbName, colName, jsonObj={}):
+        return self.getCollection(dbName, colName).find_one(jsonObj)
+
+    def searchDocument(self, dbName, colName, jsonObj={}):
         return self.getCollection(dbName, colName).find(jsonObj)
 
     def updateDocument(self, dbName, colName, valuesToSet, jsonObj={}):
@@ -67,12 +70,14 @@ class Comment:
         content: str,
         articleID: str,
         parentID: str = None,
+        removed: bool = False,
     ):
         self.articleID: str = articleID
         self.parentID: str = parentID
         self.username: str = username
         self.useremail: str = useremail
         self.content: str = content
+        self.removed: str = removed
 
     def toJson(self):
         return {
@@ -81,6 +86,7 @@ class Comment:
             "username": self.username,
             "useremail": self.useremail,
             "content": self.content,
+            "removed": self.removed,
             "replies": [],
         }
 
@@ -95,7 +101,7 @@ mongo = MongoWrapper(os.getenv("MONGO_URI"))
 
 def addTestComments(articleID):
     exists = False
-    for c in mongo.findDocument(DB_COMMENTS, COL_COMMENTS, {"articleID": articleID}):
+    for c in mongo.searchDocument(DB_COMMENTS, COL_COMMENTS, {"articleID": articleID}):
         exists = True
         break
     if not exists:
@@ -124,7 +130,7 @@ def addTestComments(articleID):
 
 
 addTestComments("d38b9aef-ab20-51c2-883c-94aa475b7273")
-for c in mongo.findDocument(DB_COMMENTS, COL_COMMENTS):
+for c in mongo.searchDocument(DB_COMMENTS, COL_COMMENTS):
     debug_out(dict(c))
 
 USERS_REGISTERED = [
@@ -153,7 +159,7 @@ PERMISSIONS = {"can_remove_comments": USERS_MODERATOR}
 
 def initalizeUsersDB():
     exists = False
-    for c in mongo.findDocument(DB_COMMENTS, COL_USERS):
+    for c in mongo.searchDocument(DB_COMMENTS, COL_USERS):
         exists = True
         break
     if not exists:
@@ -195,7 +201,7 @@ def getComments(articleid: str):
         comments = {}
         queued = {}
         for c in list(
-            mongo.findDocument(DB_COMMENTS, COL_COMMENTS, {"articleID": articleid})
+            mongo.searchDocument(DB_COMMENTS, COL_COMMENTS, {"articleID": articleid})
         ):
             d = dict(c)
             _id = str(d["_id"])
@@ -224,7 +230,7 @@ def postComment():
         debug_out(data)
 
         username = None
-        for u in mongo.findDocument(DB_COMMENTS, COL_USERS, {"email": data["email"]}):
+        for u in mongo.searchDocument(DB_COMMENTS, COL_USERS, {"email": data["email"]}):
             username = u["username"]
 
         parentID = data["parentID"]
@@ -242,8 +248,10 @@ def postComment():
         mongo.insertDocument(
             DB_COMMENTS,
             COL_COMMENTS,
-            commentData.copy(),
+            commentData,
         )
+
+        commentData["_id"] = str(commentData["_id"])
         debug_out(commentData)
         return jsonify({"status": "ok", "commentData": commentData})
     except Exception as e:
@@ -252,6 +260,7 @@ def postComment():
 
 
 COMMENT_REMOVAL_MESSAGE = "COMMENT REMOVED BY MODERATOR!"
+COMMENT_REDACTION_CHAR = "█"
 
 
 @app.route("/api/removecomment", methods=["POST"])
@@ -261,12 +270,41 @@ def removeComment():
         debug_out("Removing Comment")
         debug_out(data)
 
-        replaceData = {"content": COMMENT_REMOVAL_MESSAGE}
+        replaceData = {"content": COMMENT_REMOVAL_MESSAGE, "removed": True}
         mongo.updateDocument(
             DB_COMMENTS,
             COL_COMMENTS,
             replaceData.copy(),
-            {"_id": ObjectId(data["commentID"].replace("-",""))}
+            {"_id": ObjectId(data["commentID"])},
+        )
+        return jsonify({"status": "ok", "commentData": replaceData})
+    except Exception as e:
+        raise e
+        return jsonify({"Internal error": str(e)})
+
+
+@app.route("/api/redactcomment", methods=["POST"])
+def redactComment():
+    try:
+        data = request.form
+        debug_out("Redacting Comment")
+        debug_out(data)
+        oid = ObjectId(data["commentID"])
+        content = mongo.findDocument(DB_COMMENTS, COL_COMMENTS, {"_id": oid})["content"]
+
+        startIndex = int(data["startIndex"] )
+        endIndex = int(data["endIndex"] )
+
+        cHead = content[:startIndex]
+        cRedact = COMMENT_REDACTION_CHAR * (endIndex - startIndex)
+        cTail = content[endIndex:]
+
+        replaceData = {"content": cHead + cRedact + cTail}
+        mongo.updateDocument(
+            DB_COMMENTS,
+            COL_COMMENTS,
+            replaceData.copy(),
+            {"_id": oid},
         )
         return jsonify({"status": "ok", "commentData": replaceData})
     except Exception as e:
@@ -277,7 +315,7 @@ def removeComment():
 @app.route("/api/checkpermissions/<string:email>")
 def checkPermissions(email: str):
     perms = {}
-    for perm_doc in mongo.findDocument(DB_COMMENTS, COL_PERMISSIONS):
+    for perm_doc in mongo.searchDocument(DB_COMMENTS, COL_PERMISSIONS):
         d = dict(perm_doc)
         for k, v in d.items():
             if k != "_id":
