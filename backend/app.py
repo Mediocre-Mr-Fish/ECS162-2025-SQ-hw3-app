@@ -3,6 +3,7 @@ from authlib.integrations.flask_client import OAuth
 from authlib.common.security import generate_token
 import os
 from pymongo import MongoClient
+from bson.objectid import ObjectId
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -53,6 +54,10 @@ class MongoWrapper:
     def findDocument(self, dbName, colName, jsonObj={}):
         return self.getCollection(dbName, colName).find(jsonObj)
 
+    def updateDocument(self, dbName, colName, valuesToSet, jsonObj={}):
+        update_operation = {"$set": valuesToSet}
+        return self.getCollection(dbName, colName).update_one(jsonObj, update_operation)
+
 
 class Comment:
     def __init__(
@@ -83,7 +88,7 @@ class Comment:
 DB_COMMENTS = "commentsdb"
 COL_COMMENTS = "comments"
 COL_USERS = "users"
-
+COL_PERMISSIONS = "permissions"
 
 mongo = MongoWrapper(os.getenv("MONGO_URI"))
 
@@ -122,6 +127,29 @@ addTestComments("d38b9aef-ab20-51c2-883c-94aa475b7273")
 for c in mongo.findDocument(DB_COMMENTS, COL_COMMENTS):
     debug_out(dict(c))
 
+USERS_REGISTERED = [
+    {
+        "email": "admin@hw3.com",
+        "hash": "$2b$10$8NoCpIs/Z6v0s/pU9YxYIO10uWyhIVOS2kmNac9AD0HsqRhP5dUie",
+        "username": "admin",
+        "userID": "123",
+    },
+    {
+        "email": "moderator@hw3.com",
+        "hash": "$2b$12$2aaoZyVjMWvoCq.DmCUECOGoW0oaBCyzSluUm3BpLrP26sVT71PSC",
+        "username": "moderator",
+        "userID": "456",
+    },
+    {
+        "email": "user@hw3.com",
+        "hash": "$2b$12$321HomfT164U9f5l.xQaYuHThGCss8PRPNy8t./tq8Frgr6UYeEka",
+        "username": "user",
+        "userID": "789",
+    },
+]
+USERS_MODERATOR = ["admin@hw3.com", "moderator@hw3.com"]
+PERMISSIONS = {"can_remove_comments": USERS_MODERATOR}
+
 
 def initalizeUsersDB():
     exists = False
@@ -130,28 +158,9 @@ def initalizeUsersDB():
         break
     if not exists:
         debug_out("Creating Users DB")
-        users = [
-            {
-                "email": "admin@hw3.com",
-                "hash": "$2b$10$8NoCpIs/Z6v0s/pU9YxYIO10uWyhIVOS2kmNac9AD0HsqRhP5dUie",
-                "username": "admin",
-                "userID": "123",
-            },
-            {
-                "email": "moderator@hw3.com",
-                "hash": "$2b$12$2aaoZyVjMWvoCq.DmCUECOGoW0oaBCyzSluUm3BpLrP26sVT71PSC",
-                "username": "moderator",
-                "userID": "456",
-            },
-            {
-                "email": "user@hw3.com",
-                "hash": "$2b$12$321HomfT164U9f5l.xQaYuHThGCss8PRPNy8t./tq8Frgr6UYeEka",
-                "username": "user",
-                "userID": "789",
-            },
-        ]
-        for u in users:
+        for u in USERS_REGISTERED:
             mongo.insertDocument(DB_COMMENTS, COL_USERS, u)
+        mongo.insertDocument(DB_COMMENTS, COL_PERMISSIONS, PERMISSIONS)
 
 
 initalizeUsersDB()
@@ -186,7 +195,7 @@ def getComments(articleid: str):
         comments = {}
         queued = {}
         for c in list(
-            mongo.findDocument("commentsdb", "comments", {"articleID": articleid})
+            mongo.findDocument(DB_COMMENTS, COL_COMMENTS, {"articleID": articleid})
         ):
             d = dict(c)
             _id = str(d["_id"])
@@ -200,7 +209,9 @@ def getComments(articleid: str):
             pid = d["parentID"]
             comments[pid]["replies"].append(d)
 
-        return jsonify({"comments": list(comments.values())})
+        comments_list = list(comments.values())
+        comments_list.reverse()
+        return jsonify({"comments": comments_list})
     except Exception as e:
         return jsonify({"Internal error": str(e)})
 
@@ -238,6 +249,43 @@ def postComment():
     except Exception as e:
         raise e
         return jsonify({"Internal error": str(e)})
+
+
+COMMENT_REMOVAL_MESSAGE = "COMMENT REMOVED BY MODERATOR!"
+
+
+@app.route("/api/removecomment", methods=["POST"])
+def removeComment():
+    try:
+        data = request.form
+        debug_out("Removing Comment")
+        debug_out(data)
+
+        replaceData = {"content": COMMENT_REMOVAL_MESSAGE}
+        mongo.updateDocument(
+            DB_COMMENTS,
+            COL_COMMENTS,
+            replaceData.copy(),
+            {"_id": ObjectId(data["commentID"].replace("-",""))}
+        )
+        return jsonify({"status": "ok", "commentData": replaceData})
+    except Exception as e:
+        raise e
+        return jsonify({"Internal error": str(e)})
+
+
+@app.route("/api/checkpermissions/<string:email>")
+def checkPermissions(email: str):
+    perms = {}
+    for perm_doc in mongo.findDocument(DB_COMMENTS, COL_PERMISSIONS):
+        d = dict(perm_doc)
+        for k, v in d.items():
+            if k != "_id":
+                if k not in perms:
+                    perms[k] = False
+                if email in v:
+                    perms[k] = True
+    return jsonify(perms)
 
 
 @app.route("/")

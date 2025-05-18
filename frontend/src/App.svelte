@@ -22,14 +22,20 @@
   // #region Initialization
 
   let email = "";
+  let userPermissions: any = null;
   onMount(async () => {
     const url = new URL(window.location.href);
     const em = url.searchParams.get("email");
     if (em) {
       email = em;
     }
-
-    //console.log(email);
+    try {
+      let fetchResult = await fetch(`/api/checkpermissions/${email}`);
+      userPermissions = await fetchResult.json();
+    } catch (error) {
+      console.log("Failed to fetch permissions: " + error);
+    }
+    console.log(userPermissions);
   });
 
   /**
@@ -347,6 +353,41 @@
 
   // #region Comments
 
+  const COMMENT_STRUCT = {
+    PANEL: {
+      comments_panel_header: 1,
+      comment_form: 2,
+      comments_list: 3,
+      COMMENT_FORM: {
+        comment_textbox: 0,
+        comment_submit: 1,
+        article_id: 2,
+      },
+    },
+    COMMENT: {
+      article_id: 0,
+      comment_id: 1,
+      comment_username: 2,
+      comment_body: 3,
+      mod_actions: 4,
+      comment_replies: 5,
+      reply_form: 6,
+      line_horizontal: 7,
+      MOD_ACTIONS: {
+        button_remove: 0,
+      },
+      REPLY_FORM: {
+        reply_textbox: 0,
+        reply_submit: 1,
+      },
+    },
+    REPLY: {
+      reply_id: 0,
+      reply_username: 1,
+      reply_body: 2,
+    },
+  };
+
   function redirectToLogin() {
     window.location.href = "http://localhost:8000/login";
   }
@@ -364,6 +405,7 @@
     }
   }
 
+  // #region Render
   function renderComment(
     commentTemplate: HTMLElement,
     commentJson: any,
@@ -372,23 +414,47 @@
   ): HTMLElement {
     let newComment = <HTMLElement>commentTemplate.cloneNode(true);
 
+    //article_id
+    newComment.children[COMMENT_STRUCT.COMMENT.article_id].textContent =
+      articleID;
+    //comment_id
+    newComment.children[COMMENT_STRUCT.COMMENT.comment_id].textContent =
+      commentJson._id;
+
     //comment_username
-    newComment.children[0].textContent = commentJson.username;
+    newComment.children[COMMENT_STRUCT.COMMENT.comment_username].textContent =
+      commentJson.username;
 
     //comment_body
-    newComment.children[1].textContent = commentJson.content;
+    newComment.children[COMMENT_STRUCT.COMMENT.comment_body].textContent =
+      commentJson.content;
+
+    //mod_actions
+    {
+      if (userPermissions.can_remove_comments) {
+        const mod_actions = <HTMLDivElement>(
+          newComment.children[COMMENT_STRUCT.COMMENT.mod_actions]
+        );
+        mod_actions.hidden = false;
+        const button_remove = <HTMLButtonElement>(
+          mod_actions.children[COMMENT_STRUCT.COMMENT.MOD_ACTIONS.button_remove]
+        );
+        button_remove.onclick = removeComment;
+      }
+    }
 
     //reply_form
     {
-      let form = <HTMLFormElement>newComment.children[3];
+      let form = <HTMLFormElement>(
+        newComment.children[COMMENT_STRUCT.COMMENT.reply_form]
+      );
       form.addEventListener("submit", postReply);
-      form.children[2].textContent = articleID;
-      form.children[3].textContent = commentJson._id;
     }
 
     //comment_replies
     {
-      let replyList = newComment.children[2];
+      let replyList =
+        newComment.children[COMMENT_STRUCT.COMMENT.comment_replies];
       for (let index = 0; index < commentJson.replies.length; index++) {
         const replyJson = commentJson.replies[index];
         replyList.appendChild(renderReply(replyTemplate, replyJson));
@@ -404,10 +470,12 @@
   ): HTMLElement {
     let newReply = <HTMLElement>replyTemplate.cloneNode(true);
     //reply_username
-    newReply.children[0].textContent = replyJson.username;
+    newReply.children[COMMENT_STRUCT.REPLY.reply_username].textContent =
+      replyJson.username;
 
-    //commentreply_body_body
-    newReply.children[1].textContent = replyJson.content;
+    //reply_body
+    newReply.children[COMMENT_STRUCT.REPLY.reply_body].textContent =
+      replyJson.content;
     return newReply;
   }
 
@@ -417,7 +485,9 @@
         .children[0]
     );
   }
+  // #endregion Render
 
+  // #region Panel Mechanics
   async function openComments(this: HTMLButtonElement) {
     const articleID = this.children[0].textContent!;
 
@@ -476,12 +546,18 @@
   async function closeComments() {
     document.getElementById("comments_panel")!.style.width = "0px";
   }
+  // #endregion Panel Mechanics
 
+  // #region Post Mechanics
   async function postCommentCall(
     articleID: string,
     parentID: string,
     content: string,
   ): Promise<any | null> {
+    if (content.trim().length == 0) {
+      return null;
+    }
+
     try {
       let data = new FormData();
       data.append("articleID", articleID);
@@ -498,10 +574,29 @@
 
       return res_data;
     } catch (error) {
-      console.log("Failed to post reply: " + error);
+      console.log("Failed to post comment: " + error);
       return null;
     }
   }
+  async function removeCommentCall(commentID: string) {
+    try {
+      let data = new FormData();
+      data.append("commentID", commentID);
+
+      const res = await fetch("/api/removecomment", {
+        method: "POST",
+        body: data,
+      });
+      const res_data = await res.json();
+      console.log(res_data);
+
+      return res_data;
+    } catch (error) {
+      console.log("Failed to remove comment: " + error);
+      return null;
+    }
+  }
+
   async function postReply(e: SubmitEvent) {
     e.preventDefault();
     if (!email) {
@@ -510,25 +605,33 @@
     }
 
     const form = <HTMLElement>e.target!;
-    const reply_box = <HTMLInputElement>form.children[0];
+    const reply_box = <HTMLInputElement>(
+      form.children[COMMENT_STRUCT.COMMENT.REPLY_FORM.reply_textbox]
+    );
     const reply_body = reply_box.value;
 
-    const articleID = form.children[2].textContent!;
-    const commentID = form.children[3].textContent!;
-    try {
-      const newCommentData = await postCommentCall(
-        articleID,
-        commentID,
-        reply_body,
-      );
+    const parentComment = form.parentElement!;
+
+    const articleID =
+      parentComment.children[COMMENT_STRUCT.COMMENT.article_id].textContent!;
+    const parentID =
+      parentComment.children[COMMENT_STRUCT.COMMENT.comment_id].textContent!;
+
+    const newCommentData = await postCommentCall(
+      articleID,
+      parentID,
+      reply_body,
+    );
+    if (newCommentData != null) {
       const newCommentJson = newCommentData.commentData; //await newCommentData.json();
 
-      const existing_replies_list = form.parentElement!.children[2]!;
+      const existing_replies_list =
+        parentComment.children[COMMENT_STRUCT.COMMENT.comment_replies]!;
       existing_replies_list.appendChild(
         renderReply(getTemplate("template_reply"), newCommentJson),
       );
       reply_box.value = "";
-    } catch (error) {}
+    }
   }
 
   async function postComment(e: SubmitEvent) {
@@ -539,26 +642,45 @@
     }
 
     const form = <HTMLElement>e.target!;
-    const comment_box = <HTMLInputElement>form.children[0];
+    const comment_box = <HTMLInputElement>(
+      form.children[COMMENT_STRUCT.PANEL.COMMENT_FORM.comment_textbox]
+    );
     const comment_body = comment_box.value;
 
-    const articleID = form.children[2].textContent!;
-    try {
-      const newCommentData = await postCommentCall(articleID, "", comment_body);
+    const articleID =
+      form.children[COMMENT_STRUCT.PANEL.COMMENT_FORM.article_id].textContent!;
+
+    const newCommentData = await postCommentCall(articleID, "", comment_body);
+    if (newCommentData != null) {
       const newCommentJson = newCommentData.commentData; //await newCommentData.json();
 
-      const existing_comments_list = form.parentElement!.children[3]!;
-      existing_comments_list.appendChild(
+      const existing_comments_list =
+        form.parentElement!.children[COMMENT_STRUCT.PANEL.comments_list]!;
+      existing_comments_list.insertBefore(
         renderComment(
           getTemplate("template_comment"),
           newCommentJson,
           articleID,
           getTemplate("template_reply"),
         ),
+        existing_comments_list.firstChild,
       );
       comment_box.value = "";
-    } catch (error) {}
+    }
   }
+
+  async function removeComment(this: HTMLButtonElement) {
+    const thisComment = <HTMLDivElement>this.parentElement!.parentElement;
+    const commentID =
+      thisComment.children[COMMENT_STRUCT.COMMENT.comment_id].textContent!;
+
+    const newCommentData = await removeCommentCall(commentID);
+    const newCommentJson = newCommentData.commentData;
+
+    thisComment.children[COMMENT_STRUCT.COMMENT.comment_body].textContent =
+      newCommentJson.content;
+  }
+  // #endregion Post Mechanics
   // #endregion Comments
   // #endregion Script
 </script>
@@ -607,7 +729,7 @@
 
   <section id="comments_panel">
     <h1 hidden>Comments Pannel</h1>
-    <div>
+    <div id="comments_panel_header">
       <button id="comments_panel_closebutton" onclick={closeComments}>
         close
       </button>
@@ -663,8 +785,13 @@
 
   <template id="template_comment">
     <div class="comment">
+      <p hidden>ARTICLE_ID</p>
+      <p hidden>COMMENT_ID</p>
       <p class="comment_username">Commenter Username</p>
       <p class="comment_body">Comment Body</p>
+      <div class="mod_actions" hidden>
+        <button class="button_remove"> Remove Comment </button>
+      </div>
       <section class="comment_replies">
         <h1>Replies</h1>
         <!-- replies go here -->
@@ -672,8 +799,6 @@
       <form class="reply_form">
         <input class="reply_textbox" type="text" />
         <button class="reply_submit">Post</button>
-        <p hidden>ARTICLE_ID</p>
-        <p hidden>COMMENT_ID</p>
       </form>
       <div class="line_horizontal"></div>
     </div>
@@ -681,8 +806,9 @@
 
   <template id="template_reply">
     <div class="reply">
+      <p hidden>REPLY_ID</p>
       <p class="reply_username">Replier Username</p>
-      <p class="reply_body">Repy Body</p>
+      <p class="reply_body">Reply Body</p>
     </div>
   </template>
   <!-- #endregion HTML -->
@@ -730,7 +856,7 @@
     .reply_body {
       font-size: small;
       margin: 0;
-      padding: 1px;
+      padding: 1px 3px 1px 1px;
     }
     .line_horizontal {
       border-color: grey;
