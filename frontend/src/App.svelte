@@ -357,9 +357,11 @@
   // json object containing indexes for html elements
   const COMMENT_STRUCT = {
     PANEL: {
-      comments_panel_header: 1,
-      comment_form: 2,
-      comments_list: 3,
+      h1:0,
+      article_id:1,
+      comments_panel_header: 2,
+      comment_form: 3,
+      comments_list: 4,
       COMMENT_FORM: {
         comment_textbox: 0,
         comment_submit: 1,
@@ -412,6 +414,9 @@
    */
   function redirectToLogin() {
     window.location.href = "http://localhost:8000/login";
+  }
+  function redirectToLogout() {
+    window.location.href = "http://localhost:8000/logout";
   }
 
   // #region Render
@@ -552,9 +557,9 @@
 
       //comment_form
       {
-        let form = <HTMLFormElement>comments_panel.children[2];
+        let form = <HTMLFormElement>comments_panel.children[COMMENT_STRUCT.PANEL.comment_form];
         form.addEventListener("submit", postComment);
-        form.children[2].textContent = articleID;
+        form.children[COMMENT_STRUCT.PANEL.COMMENT_FORM.article_id].textContent = articleID;
       }
 
       let comments = null;
@@ -583,11 +588,12 @@
         );
       }
 
-      comments_panel.children[0].textContent = articleID;
+      comments_panel.children[COMMENT_STRUCT.PANEL.article_id].textContent = articleID;
     }
   }
   async function closeComments() {
-    document.getElementById("comments_panel")!.style.transform = "translateX(100%)";
+    document.getElementById("comments_panel")!.style.transform =
+      "translateX(100%)";
     //document.getElementById("comments_panel")!.style.width = "0px";
   }
   // #endregion Panel Mechanics
@@ -961,27 +967,47 @@
   </header>
 
   <section id="comments_panel">
-    <h1 hidden>Comments Pannel</h1>
+    <h1>Comments</h1>
+    <p hidden>ARTICLE_ID</p>
     <div id="comments_panel_header">
       {#if email}
         <div class="header_loggedin_row">
-          <button id="comments_panel_closebutton" class="comments_header_button transparent_button" onclick={closeComments}>
+          <button
+            id="comments_panel_closebutton"
+            class="comments_header_button transparent_button"
+            onclick={closeComments}
+          >
             <img src={xIcon} alt="Minimize" class="minimize_icon" />
           </button>
           <p class="header_email">{email}</p>
+          <button class="comments_header_button" onclick={redirectToLogout}>
+            Logout
+          </button>
         </div>
       {:else}
         <div class="header_loggedin_row">
-          <button id="comments_panel_closebutton" class="comments_header_button transparent_button" onclick={closeComments}>
+          <button
+            id="comments_panel_closebutton"
+            class="comments_header_button transparent_button"
+            onclick={closeComments}
+          >
             <img src={xIcon} alt="Minimize" class="minimize_icon" />
           </button>
-          <button class="comments_header_button" onclick={redirectToLogin}>Login</button>
+          <button class="comments_header_button" onclick={redirectToLogin}>
+            Login
+          </button>
         </div>
       {/if}
     </div>
     <form class="comment_form">
       <input class="comment_textbox" type="text" />
-      <button class="comment_submit">Post</button>
+      <button class="comment_submit">
+        {#if email}
+          Post
+        {:else}
+          Login
+        {/if}
+      </button>
       <p hidden>ARTICLE_ID</p>
     </form>
     <section id="comments_list">
@@ -1045,7 +1071,13 @@
       </section>
       <form class="reply_form">
         <input class="reply_textbox" type="text" />
-        <button class="reply_submit">Post</button>
+        <button class="reply_submit">
+          {#if email}
+            Post
+          {:else}
+            Login
+          {/if}
+        </button>
       </form>
       <div class="line_horizontal"></div>
     </div>
@@ -1078,7 +1110,7 @@
   /*https://www.w3schools.com/howto/tryit.asp?filename=tryhow_js_sidenav*/
   #comments_panel {
     height: 100svh;
-    width: 250px; /* width: 0; */
+    width: 33%; /* width: 0; */
     position: -webkit-sticky;
     position: fixed;
     z-index: 1;
@@ -1087,7 +1119,7 @@
     background-color: #dfdfdf;
     overflow-y: auto;
     transition: 0.5s;
-    transform: translateX(100%);   /* Testing this */
+    transform: translateX(100%); /* Testing this */
     margin: 0;
 
     /* Does this tackle the squishing */
@@ -1125,9 +1157,6 @@
       border-width: 0px 0px 1px 0px;
     }
   }
-  .mod_actions > button {
-    font-size: small;
-  }
   .comment_replies > h1 {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: small;
@@ -1138,20 +1167,51 @@
   .reply_from {
     display: flex;
     flex-direction: row;
+    /* justify-content: space-between; */
   }
   .comment_textbox,
   .reply_textbox {
-    flex-grow: 1;
+    /* flex-grow: 1; doesn't work for some reason */
     height: 20px;
+    width: calc(50%);
     padding: 2px;
     border-width: 1px;
   }
   .comment_submit,
   .reply_submit {
-    flex-grow: 1;
     height: 27.2px;
+    width: 82px;
     padding: 2px;
     border-width: 1px;
+  }
+  .comment_submit,
+  .reply_submit,
+  .mod_actions > button {
+    height: 27.2px;
+    background-color: #567b95;
+    color: white;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: medium;
+    line-height: 1.2; /* NEW: Ensures better vertical centering */
+    border: none;
+    border-radius: 8px;
+    padding: 10px 25px;
+    margin: 5px 0px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    display: inline-flex; /* NEW: use flexbox */
+    align-items: center; /* NEW: vertically center text */
+    justify-content: center; /* NEW: horizontally center text */
+  }
+
+  .comment_submit:hover,
+  .reply_submit:hover,
+  .mod_actions > button:hover {
+    background-color: #326891;
+  }
+  .mod_actions_directions {
+    padding: 1px;
+    margin: 1px;
   }
 
   .comments_header_button {
@@ -1172,49 +1232,24 @@
   }
 
   .header_loggedin_row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
   }
 
   .header_email {
-    font-size: 1.0em;
+    font-size: 1em;
     /* font-weight: bold; Ends up, this is super ugly */
     margin: 0;
   }
 
-
   /* (comment: NEW! Style for comment Post and Remove buttons) */
-  .comment_submit,
-  .reply_submit,
-  .button_remove {
-    background-color: #567b95;
-    color: white;
-    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    font-size: medium;
-    line-height: 1.2; /* NEW: Ensures better vertical centering */
-    border: none;
-    border-radius: 8px;
-    padding: 10px 25px;
-    margin: 5px 0px;
-    cursor: pointer;
-    transition: background-color 0.3s;
-    display: inline-flex;       /* NEW: use flexbox */
-    align-items: center;        /* NEW: vertically center text */
-    justify-content: center;    /* NEW: horizontally center text */
-  }
 
-  .comment_submit:hover,
-  .reply_submit:hover,
-  .button_remove:hover {
-    background-color: #326891;
-  }
   /* (comment: END SECTION #) */
-                              /* (END SECTION) */
+  /* (END SECTION) */
 
-
-    /* (comment: NEW! Style for 'Comments' button under each article) */
+  /* (comment: NEW! Style for 'Comments' button under each article) */
   .article_comment_button {
     background-color: #567b95;
     color: white;
@@ -1232,7 +1267,7 @@
     background-color: #326891;
   }
 
-    .minimize_icon {
+  .minimize_icon {
     width: 16px;
     height: 16px;
     vertical-align: middle;
@@ -1251,17 +1286,6 @@
     width: 20px;
     height: 20px;
     display: block;
-  }
-
-  /* (comment: END SECTION #) */
-
-  /*formatting for the article content*/
-  .feed_main {
-    font-size: small;
-    color: #5a5a5a;
-    padding: 0px 10px 0px 10px;
-    text-align: left;
-    line-height: 20px;
   }
   /* #endregion Comments */
 
@@ -1349,38 +1373,6 @@
     border-width: 0px 0px 0px 2px;
 
     font-family: Georgia;
-  }
-
-  /*media queries to change the number of columns based on page width
-Based on examples by w3schools's Media Queries tutorial: https://www.w3schools.com/css/css_rwd_mediaqueries.asp
-*/
-  @media only screen and (max-width: 1024px) {
-    #feed_grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-
-  @media only screen and (max-width: 768px) {
-    #feed_grid {
-      grid-template-columns: 100%;
-    }
-
-    /*these rearrange the header so that the logo does not cause the date to wrap*/
-    .header_flex {
-      flex-direction: column;
-      align-items: center;
-    }
-
-    #header_date {
-      padding-left: 30px;
-      padding-top: 13.5px;
-    }
-
-    #logo_nyt {
-      max-width: 290px;
-      margin: 0px;
-      padding: 0px;
-    }
   }
 
   /*general item format*/
@@ -1476,5 +1468,48 @@ Based on examples by w3schools's Media Queries tutorial: https://www.w3schools.c
     letter-spacing: 0.5px;
   }
   /* #endregion Feed Grid */
+
+  /* #region Media Query */
+
+  /*media queries to change the number of columns based on page width
+Based on examples by w3schools's Media Queries tutorial: https://www.w3schools.com/css/css_rwd_mediaqueries.asp
+*/
+  @media only screen and (max-width: 1024px) {
+    #feed_grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media only screen and (max-width: 768px) {
+    #feed_grid {
+      grid-template-columns: 100%;
+    }
+
+    /*these rearrange the header so that the logo does not cause the date to wrap*/
+    .header_flex {
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #header_date {
+      padding-left: 30px;
+      padding-top: 13.5px;
+    }
+
+    #logo_nyt {
+      max-width: 290px;
+      margin: 0px;
+      padding: 0px;
+    }
+    #comments_panel {
+      width: 100%;
+    }
+  }
+  /* #endregion Media Query */
+
+  /* https://stackoverflow.com/questions/23772673/hidden-property-does-not-work-with-flex-box */
+  [hidden] {
+    display: none !important;
+  }
   /* #endregion Style */
 </style>
