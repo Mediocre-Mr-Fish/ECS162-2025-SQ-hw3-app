@@ -10,7 +10,7 @@ SVG sources linked in HTML comments or in .svg file comments.
 
 ## Git
 
-Repository at [`https://github.com/Mediocre-Mr-Fish/ECS162-2025-SQ-hw3-app`](`https://github.com/Mediocre-Mr-Fish/ECS162-2025-SQ-hw3-app`)
+Repository at [`https://github.com/Mediocre-Mr-Fish/ECS162-2025-SQ-hw3-app`](<https://github.com/Mediocre-Mr-Fish/ECS162-2025-SQ-hw3-app>)
 
 Commit history only covers from importing files from Homework 2.
 
@@ -62,7 +62,7 @@ This can be removed or changed on line `132` of `app.py`:
 addTestComments("d38b9aef-ab20-51c2-883c-94aa475b7273")
 ```
 
-By default, it only adds these comments to the article "[We Mapped Heat in 3 U.S. Cities. Some Sidewalks Were Over 130 Degrees.]("https://www.nytimes.com/interactive/2024/07/17/climate/heat-map-phoenix-sacramento-portland.html")", which is the first article to appear when filtering by location.
+By default, it only adds these comments to the article "[We Mapped Heat in 3 U.S. Cities. Some Sidewalks Were Over 130 Degrees.](<https://www.nytimes.com/interactive/2024/07/17/climate/heat-map-phoenix-sacramento-portland.html>)", which is the first article to appear when filtering by location.
 
 To add sample comments to a different article, the article ID can be changed. To find the ID of an article, it can be viewed in the consle. 
 
