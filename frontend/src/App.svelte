@@ -1331,6 +1331,8 @@
   /* #region Style */
 
   /* #region Comments */
+
+  /*comments panel */
   /*https://www.w3schools.com/howto/tryit.asp?filename=tryhow_js_sidenav*/
   #comments_panel {
     height: 100svh;
@@ -1358,12 +1360,15 @@
       font-size: large;
       margin-bottom: 0px;
     }
+
+    /* change the line color to stand out better against the background*/
     .line_horizontal {
       border-color: grey;
       border-width: 0px 0px 1px 0px;
     }
   }
 
+  /* the message that tells you to comment */
   .comment_post_directions,
   .reply_post_directions {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -1374,6 +1379,7 @@
     padding: 0px 5px;
   }
 
+  /* style of the comments/replies themselves */
   .comment,
   .reply {
     text-align: left;
@@ -1383,22 +1389,27 @@
     margin: 0;
     border: 0;
 
+    /* username of the commenter/replier */
     .comment_username,
     .reply_username {
       margin: 0;
       padding: 1px;
     }
+    /* content of the comment/reply */
     .comment_body,
     .reply_body {
       font-size: small;
       margin: 0;
       padding: 1px 3px 1px 1px;
     }
+    /* change the line color to stand out better against the background*/
     .line_horizontal {
       border-color: grey;
       border-width: 0px 0px 1px 0px;
     }
   }
+
+  /* text that says "Replies" */
   .comment_replies > h1 {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: small;
@@ -1452,11 +1463,14 @@
   .mod_actions > button:hover {
     background-color: #326891;
   }
+
+  /* Blurb that tells you how to moderate */
   .mod_actions_directions {
     padding: 1px;
     margin: 1px;
   }
 
+  /* login/logout button */
   .comments_header_button {
     background-color: #567b95;
     color: white;
@@ -1473,6 +1487,13 @@
   .comments_header_button:hover {
     background-color: #326891;
   }
+  /* close comments button */
+  .comments_header_button.transparent_button {
+    background-color: transparent;
+    border: none;
+    padding: 5px;
+    box-shadow: none;
+  }
 
   .header_loggedin_row {
     display: flex;
@@ -1481,13 +1502,12 @@
     gap: 10px;
   }
 
+  /* text that displays your email when logged in */
   .header_email {
     font-size: 1em;
     margin: 0;
   }
-
-  
-  
+  /* button to show comments */
   .article_comment_button {
     background-color: #567b95;
     color: white;
@@ -1503,21 +1523,6 @@
 
   .article_comment_button:hover {
     background-color: #326891;
-  }
-
-  .minimize_icon {
-    width: 16px;
-    height: 16px;
-    vertical-align: middle;
-  }
-
-  /* The comment button aesthetic changes*/
-
-  .comments_header_button.transparent_button {
-    background-color: transparent;
-    border: none;
-    padding: 5px;
-    box-shadow: none;
   }
 
   .minimize_icon {

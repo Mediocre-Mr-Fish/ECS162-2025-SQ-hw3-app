@@ -166,10 +166,20 @@ def initalizeUsersDB():
         debug_out("Creating Users DB")
         for u in USERS_REGISTERED:
             mongo.insertDocument(DB_COMMENTS, COL_USERS, u)
+
+
+def initalizePermissionsDB():
+    exists = False
+    for c in mongo.searchDocument(DB_COMMENTS, COL_PERMISSIONS):
+        exists = True
+        break
+    if not exists:
+        debug_out("Creating Permissions DB")
         mongo.insertDocument(DB_COMMENTS, COL_PERMISSIONS, PERMISSIONS)
 
 
 initalizeUsersDB()
+initalizePermissionsDB()
 
 # @app.route('/api/key')
 # def get_key():
@@ -292,8 +302,8 @@ def redactComment():
         oid = ObjectId(data["commentID"])
         content = mongo.findDocument(DB_COMMENTS, COL_COMMENTS, {"_id": oid})["content"]
 
-        startIndex = int(data["startIndex"] )
-        endIndex = int(data["endIndex"] )
+        startIndex = int(data["startIndex"])
+        endIndex = int(data["endIndex"])
 
         cHead = content[:startIndex]
         cRedact = COMMENT_REDACTION_CHAR * (endIndex - startIndex)
