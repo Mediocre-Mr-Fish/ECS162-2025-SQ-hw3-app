@@ -1,3 +1,11 @@
+# IMPORTANT
+
+**DOES NOT WORK IN PRODUCTION MODE**
+
+**RUN IN DEV MODE**
+
+`docker-compose -f docker-compose.dev.yml up --build`
+
 # Homework 3
 
 The New York Times front page mock-up made by Ellison Song and Sean Singleton.
