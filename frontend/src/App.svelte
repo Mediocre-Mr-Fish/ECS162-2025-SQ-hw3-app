@@ -361,8 +361,10 @@
       h1: 0,
       article_id: 1,
       comments_panel_header: 2,
-      comment_form: 3,
-      comments_list: 4,
+      comment_post_directions: 3,
+      comment_form: 4,
+      line_horizontal: 5,
+      comments_list: 6,
       COMMENT_FORM: {
         comment_textbox: 0,
         comment_submit: 1,
@@ -377,8 +379,9 @@
       comment_body_textarea: 4,
       mod_actions: 5,
       comment_replies: 6,
-      reply_form: 7,
-      line_horizontal: 8,
+      reply_post_directions: 7,
+      reply_form: 8,
+      line_horizontal: 9,
       MOD_ACTIONS: {
         mod_actions_directions: 0,
         button_remove: 1,
@@ -1217,11 +1220,19 @@
         </div>
       {/if}
     </div>
+    <p class="comment_post_directions">
+      {#if email}
+        Post a comment!
+      {:else}
+        Login to comment
+      {/if}
+    </p>
     <form class="comment_form">
       <input class="comment_textbox" type="text" />
       <button class="comment_submit"> Post </button>
       <p hidden>ARTICLE_ID</p>
     </form>
+    <div class="line_horizontal"></div>
     <section id="comments_list">
       <h1>Comments</h1>
       <!-- Commnets go here! -->
@@ -1248,7 +1259,7 @@
 
         <p class="feed_main">Feed_Main</p>
       </a>
-      <div>
+      <div class="feed_footer">
         <a class="feed_readtime">
           The read time, as calculated from word count.
         </a>
@@ -1281,6 +1292,13 @@
         <h1>Replies</h1>
         <!-- replies go here -->
       </section>
+      <p class="reply_post_directions">
+        {#if email}
+          Reply to this comment!
+        {:else}
+          Login to reply
+        {/if}
+      </p>
       <form class="reply_form">
         <input class="reply_textbox" type="text" />
         <button class="reply_submit"> Post </button>
@@ -1317,12 +1335,14 @@
   #comments_panel {
     height: 100svh;
     width: 33%; /* width: 0; */
+    min-width: 400px;
     position: -webkit-sticky;
     position: fixed;
     z-index: 1;
     top: 0;
     right: 0;
     background-color: #dfdfdf;
+    overflow-wrap: break-word;
     overflow-y: auto;
     transition: 0.5s;
     transform: translateX(100%);
@@ -1338,6 +1358,20 @@
       font-size: large;
       margin-bottom: 0px;
     }
+    .line_horizontal {
+      border-color: grey;
+      border-width: 0px 0px 1px 0px;
+    }
+  }
+
+  .comment_post_directions,
+  .reply_post_directions {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: black;
+    font-size: medium;
+    margin-bottom: 0px;
+    text-align: left;
+    padding: 0px 5px;
   }
 
   .comment,
@@ -1371,17 +1405,18 @@
     color: grey;
   }
 
-  .comment_from,
-  .reply_from {
+  .comment_form,
+  .reply_form {
     display: flex;
     flex-direction: row;
-    /* justify-content: space-between; */
+
+    margin: 0px 5px;
+    justify-content: left;
   }
   .comment_textbox,
   .reply_textbox {
-    /* flex-grow: 1; doesn't work for some reason */
-    height: 20px;
-    width: calc(50%);
+    flex-grow: 1;
+    margin: 2px;
     padding: 2px;
     border-width: 1px;
   }
@@ -1404,7 +1439,7 @@
     border: none;
     border-radius: 8px;
     padding: 10px 25px;
-    margin: 5px 0px;
+    margin: 2px 2px;
     cursor: pointer;
     transition: background-color 0.3s;
     display: inline-flex; /* NEW: use flexbox */
@@ -1448,16 +1483,11 @@
 
   .header_email {
     font-size: 1em;
-    /* font-weight: bold; Ends up, this is super ugly */
     margin: 0;
   }
 
-  /* (comment: NEW! Style for comment Post and Remove buttons) */
-
-  /* (comment: END SECTION #) */
-  /* (END SECTION) */
-
-  /* (comment: NEW! Style for 'Comments' button under each article) */
+  
+  
   .article_comment_button {
     background-color: #567b95;
     color: white;
@@ -1466,7 +1496,7 @@
     border: none;
     border-radius: 4px;
     padding: 5px 10px;
-    margin-top: 5px;
+    margin: 5px 10px;
     cursor: pointer;
     transition: background-color 0.3s;
   }
@@ -1665,15 +1695,22 @@
     line-height: 20px;
   }
 
+  /* formatting for the div that contains the read length and comments button */
+  .feed_footer {
+    display: flex;
+    justify-content: space-between;
+  }
+
   /*formatting for the little read length indicator*/
   .feed_readtime {
     font-size: x-small;
     color: #727272;
-    padding: 0px 10px 10px 10px;
-    margin: 0px;
+    padding: 0px;
+    margin: 5px 10px;
     text-align: left;
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     letter-spacing: 0.5px;
+    line-height: 20px;
   }
   /* #endregion Feed Grid */
 
@@ -1715,6 +1752,7 @@ Based on examples by w3schools's Media Queries tutorial: https://www.w3schools.c
   }
   /* #endregion Media Query */
 
+  /* Makes sure elements marked as 'hidden' are not overrriden by 'display' */
   /* https://stackoverflow.com/questions/23772673/hidden-property-does-not-work-with-flex-box */
   [hidden] {
     display: none !important;
