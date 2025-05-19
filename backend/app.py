@@ -229,7 +229,7 @@ def postComment():
         debug_out("Posting Comment")
         debug_out(data)
 
-        username = None
+        username = data["email"]
         for u in mongo.searchDocument(DB_COMMENTS, COL_USERS, {"email": data["email"]}):
             username = u["username"]
 

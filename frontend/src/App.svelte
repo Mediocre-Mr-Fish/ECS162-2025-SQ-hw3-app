@@ -22,6 +22,7 @@
 
   // #region Initialization
 
+  // read email from URL and fetch permissions
   let email = "";
   let userPermissions: any = {};
   onMount(async () => {
@@ -357,8 +358,8 @@
   // json object containing indexes for html elements
   const COMMENT_STRUCT = {
     PANEL: {
-      h1:0,
-      article_id:1,
+      h1: 0,
+      article_id: 1,
       comments_panel_header: 2,
       comment_form: 3,
       comments_list: 4,
@@ -410,22 +411,34 @@
     },
   };
   /**
-   *
+   * function to redirect to the login page
    */
   function redirectToLogin() {
     window.location.href = "http://localhost:8000/login";
   }
+  /**
+   * function to redirect to the logout page
+   */
   function redirectToLogout() {
     window.location.href = "http://localhost:8000/logout";
   }
 
   // #region Render
+
+  /**
+   * Creates a HTML object from the comments template
+   * @param commentTemplate the template to use
+   * @param commentJson the JSON of the comment
+   * @param articleID the article that this comment is under
+   * @param replyTemplate the template for this comment's replies
+   */
   function renderComment(
     commentTemplate: HTMLElement,
     commentJson: any,
     articleID: string,
     replyTemplate: HTMLElement,
   ): HTMLElement {
+    // clone template
     let newComment = <HTMLElement>commentTemplate.cloneNode(true);
 
     //article_id
@@ -445,11 +458,14 @@
 
     //mod_actions
     {
+      // don't show mod actions if user does not have permission, or comment is already removed
       if (userPermissions.can_remove_comments && !commentJson.removed) {
         const mod_actions = <HTMLDivElement>(
           newComment.children[COMMENT_STRUCT.COMMENT.mod_actions]
         );
         mod_actions.hidden = false;
+
+        // set callbacks for mod actions buttons
         function setButton(key: string, callback: Function) {
           (<HTMLButtonElement>(
             mod_actions.children[COMMENT_STRUCT.COMMENT.MOD_ACTIONS[key]]
@@ -484,11 +500,16 @@
 
     return newComment;
   }
-
+  /**
+   * Creates a HTML object from the replies template
+   * @param replyTemplate the template for this comment's replies
+   * @param replyJson the JSON of the comment
+   */
   function renderReply(
     replyTemplate: HTMLElement,
     replyJson: any,
   ): HTMLElement {
+    // clone template
     let newReply = <HTMLElement>replyTemplate.cloneNode(true);
 
     //reply_id
@@ -505,11 +526,14 @@
 
     //mod_actions
     {
+      // don't show mod actions if user does not have permission, or comment is already removed
       if (userPermissions.can_remove_comments && !replyJson.removed) {
         const mod_actions = <HTMLDivElement>(
           newReply.children[COMMENT_STRUCT.REPLY.mod_actions]
         );
         mod_actions.hidden = false;
+
+        // set callbacks for mod actions buttons
         function setButton(key: string, callback: Function) {
           (<HTMLButtonElement>(
             mod_actions.children[COMMENT_STRUCT.COMMENT.MOD_ACTIONS[key]]
@@ -527,6 +551,12 @@
     return newReply;
   }
 
+  /**
+   * gets a template by ID.
+   * Notably, this returns the first child in the template,
+   * as it assumes that the <template> tag is just a wrapper for the desired element
+   * @param template_name_id the ID of the template
+   */
   function getTemplate(template_name_id: string) {
     return <HTMLElement>(
       (<HTMLTemplateElement>document.getElementById(template_name_id)!).content
@@ -536,11 +566,18 @@
   // #endregion Render
 
   // #region Panel Mechanics
+
+  /**
+   * Function to open the comments panel, fetch comments, and render them
+   * @param this the button that opens the comments. Must contain a child that holds the article ID.
+   */
   async function openComments(this: HTMLButtonElement) {
+    // retrieves the article ID from hidden child
     const articleID = this.children[0].textContent!;
 
     console.log("openComments: " + articleID);
 
+    // Slide in the sidebar. Inspired by:
     //https://www.w3schools.com/howto/tryit.asp?filename=tryhow_js_sidenav
     let comments_panel = document.getElementById("comments_panel")!;
     comments_panel.style.transform = "translateX(0)"; //comments_panel.style.width = "250px";
@@ -548,8 +585,10 @@
     if (lastOpenedComments === articleID) {
       // don't rerender comments
     } else {
+      // remember which article's comments have been rendered last
       lastOpenedComments = articleID;
 
+      // clear all previously displayed comments
       const comments_list = document.getElementById("comments_list")!;
       while (comments_list.children.length > 0) {
         comments_list.children[0].remove();
@@ -557,11 +596,16 @@
 
       //comment_form
       {
-        let form = <HTMLFormElement>comments_panel.children[COMMENT_STRUCT.PANEL.comment_form];
+        let form = <HTMLFormElement>(
+          comments_panel.children[COMMENT_STRUCT.PANEL.comment_form]
+        );
         form.addEventListener("submit", postComment);
-        form.children[COMMENT_STRUCT.PANEL.COMMENT_FORM.article_id].textContent = articleID;
+        form.children[
+          COMMENT_STRUCT.PANEL.COMMENT_FORM.article_id
+        ].textContent = articleID;
       }
 
+      // fetch comments
       let comments = null;
       try {
         const res = await fetch(`/api/comments/${articleID}`);
@@ -574,9 +618,11 @@
         return;
       }
 
+      // get templates
       const commentTemplate = getTemplate("template_comment");
       const replyTemplate = getTemplate("template_reply");
 
+      // render and add comments
       for (let index = 0; index < comments.length; index++) {
         comments_list.appendChild(
           renderComment(
@@ -588,9 +634,14 @@
         );
       }
 
-      comments_panel.children[COMMENT_STRUCT.PANEL.article_id].textContent = articleID;
+      comments_panel.children[COMMENT_STRUCT.PANEL.article_id].textContent =
+        articleID;
     }
   }
+
+  /**
+   * Function to slide out sidebar
+   */
   async function closeComments() {
     document.getElementById("comments_panel")!.style.transform =
       "translateX(100%)";
@@ -599,135 +650,205 @@
   // #endregion Panel Mechanics
 
   // #region Post Mechanics
+
+  /**
+   * Function to make a post request to post a comment/reply.
+   * Returns newly formed database comment object when posted successfully.
+   * Returns null if comment is empty, or failed to post.
+   * @param articleID The article ID to post this comment/reply to.
+   * @param parentID The parent comment ID that this is a reply to, or an empty string if this is a comment and not a reply.
+   * @param content The content of the this comment/reply.
+   */
   async function postCommentCall(
     articleID: string,
     parentID: string,
     content: string,
   ): Promise<any | null> {
+    // if this comment is empty or only whitespace, do nothing
     if (content.trim().length == 0) {
       return null;
     }
 
     try {
+      // compile comment/reply data
       let data = new FormData();
       data.append("articleID", articleID);
       data.append("parentID", parentID);
       data.append("email", email);
       data.append("content", content);
 
+      // make request
       const res = await fetch("/api/postcomment", {
         method: "POST",
         body: data,
       });
+
+      // parse and return comment data
       const res_data = await res.json();
       console.log(res_data);
-
       return res_data;
     } catch (error) {
       console.log("Failed to post comment: " + error);
       return null;
     }
   }
+  /**
+   * Function to make a post request to remove a comment/reply.
+   * Returns edited database comment object when removed successfully.
+   * Returns null if failed to remove.
+   * @param commentID The comment/reply ID to remove.
+   */
   async function removeCommentCall(commentID: string) {
     try {
+      // compile request data
       let data = new FormData();
       data.append("commentID", commentID);
 
+      // make request
       const res = await fetch("/api/removecomment", {
         method: "POST",
         body: data,
       });
+
+      // parse and return comment data
       const res_data = await res.json();
       console.log(res_data);
-
       return res_data;
     } catch (error) {
       console.log("Failed to remove comment: " + error);
       return null;
     }
   }
+  /**
+   * Function to make a post request to redact part of a comment/reply.
+   * Returns edited database comment object when redacted successfully.
+   * Returns null if failed to remove.
+   * @param commentID The comment/reply ID to redact.
+   * @param startIndex The index of the start of the portion to redact
+   * @param endIndex The index of the end of the portion to redact
+   */
   async function redactCommentCall(
     commentID: string,
     startIndex: number,
     endIndex: number,
   ) {
     try {
+      // compile form data
       let data = new FormData();
       data.append("commentID", commentID);
       data.append("startIndex", startIndex.toString());
       data.append("endIndex", endIndex.toString());
 
+      // make request
       const res = await fetch("/api/redactcomment", {
         method: "POST",
         body: data,
       });
+
+      // parse and return comment data
       const res_data = await res.json();
       console.log(res_data);
-
       return res_data;
     } catch (error) {
       console.log("Failed to redact comment: " + error);
       return null;
     }
   }
+  /**
+   * Callback Function to post reply.
+   * Compiles relevent data and makes a post request, then processes the return.
+   * @param e Form submit event
+   */
   async function postReply(e: SubmitEvent) {
+    // prevent page from refreshing
     e.preventDefault();
+
+    // if not logged in, redirect to login page
     if (!email) {
       redirectToLogin();
       return;
     }
 
+    // get the form object
     const form = <HTMLElement>e.target!;
+    // get the textbox input
     const reply_box = <HTMLInputElement>(
       form.children[COMMENT_STRUCT.COMMENT.REPLY_FORM.reply_textbox]
     );
     const reply_body = reply_box.value;
 
+    // get the parent comment
     const parentComment = form.parentElement!;
 
+    // get article ID and parent comment ID
     const articleID =
       parentComment.children[COMMENT_STRUCT.COMMENT.article_id].textContent!;
     const parentID =
       parentComment.children[COMMENT_STRUCT.COMMENT.comment_id].textContent!;
 
+    // send request and recieve parsed comment data
     const newCommentData = await postCommentCall(
       articleID,
       parentID,
       reply_body,
     );
+
+    // if the comment was posted successfully, update the current HTML
     if (newCommentData != null) {
       const newCommentJson = newCommentData.commentData; //await newCommentData.json();
 
+      // get the replies list object
       const existing_replies_list =
         parentComment.children[COMMENT_STRUCT.COMMENT.comment_replies]!;
+
+      // render and add the new reply
       existing_replies_list.appendChild(
         renderReply(getTemplate("template_reply"), newCommentJson),
       );
+
+      // clear the text input
       reply_box.value = "";
     }
   }
+  /**
+   * Callback Function to post comment.
+   * Compiles relevent data and makes a post request, then processes the return.
+   * @param e Form submit event
+   */
   async function postComment(e: SubmitEvent) {
+    // prevent page from refreshing
     e.preventDefault();
+
+    // if not logged in, redirect to login page
     if (!email) {
       redirectToLogin();
       return;
     }
 
+    // get the form object
     const form = <HTMLElement>e.target!;
+    // get the textbox input
     const comment_box = <HTMLInputElement>(
       form.children[COMMENT_STRUCT.PANEL.COMMENT_FORM.comment_textbox]
     );
     const comment_body = comment_box.value;
 
+    // get article ID
     const articleID =
       form.children[COMMENT_STRUCT.PANEL.COMMENT_FORM.article_id].textContent!;
 
+    // send request and recieve parsed comment data
     const newCommentData = await postCommentCall(articleID, "", comment_body);
+
+    // if the comment was posted successfully, update the current HTML
     if (newCommentData != null) {
       const newCommentJson = newCommentData.commentData; //await newCommentData.json();
 
+      // get the comments list object
       const existing_comments_list =
         form.parentElement!.children[COMMENT_STRUCT.PANEL.comments_list]!;
+
+      // render and add the new comment
       existing_comments_list.insertBefore(
         renderComment(
           getTemplate("template_comment"),
@@ -735,15 +856,20 @@
           articleID,
           getTemplate("template_reply"),
         ),
-        existing_comments_list.firstChild,
+        existing_comments_list.firstChild, // insert at the top for reverse chronological order
       );
+
+      // clear the text input
       comment_box.value = "";
     }
   }
 
   // #region Mod Actions
+
+  // json object of arrangements of mod actions
   const MOD_ACTIONS_ARRANGEMENT = {
     idle: {
+      // normal view
       mod_actions_directions: "",
       button_remove: true,
       button_redact: true,
@@ -753,6 +879,7 @@
       button_redact_cancel: false,
     },
     removing: {
+      // has clicked 'remove'
       mod_actions_directions: "Remove comment?",
       button_remove: false,
       button_redact: false,
@@ -762,6 +889,7 @@
       button_redact_cancel: false,
     },
     redacting: {
+      // has clicked 'redact'
       mod_actions_directions: "Select text to redact",
       button_remove: false,
       button_redact: false,
@@ -771,6 +899,7 @@
       button_redact_cancel: true,
     },
     removed: {
+      // after removal
       mod_actions_directions: "",
       button_remove: false,
       button_redact: false,
@@ -780,14 +909,22 @@
       button_redact_cancel: false,
     },
   };
+  /**
+   * Function to rearrange mod actions
+   * @param mod_actions the mod_actions div element
+   * @param structure the structure json that contains the element indexes
+   * @param arrangement the arragement json to apply
+   */
   function arrange_mod_actions(
     mod_actions: HTMLDivElement,
     structure: any,
     arrangement: any,
   ) {
+    // change directions
     mod_actions.children[structure.mod_actions_directions].textContent =
       arrangement.mod_actions_directions;
 
+    // set the 'hidden' value of each button
     const buttons = [
       "button_remove",
       "button_redact",
@@ -802,118 +939,197 @@
     });
   }
 
+  /**
+   * Callback Function for remove button.
+   * Rearranges mod actions.
+   * @param this the button contained in the relevent mod_actions div
+   */
   async function callback_button_remove(this: HTMLButtonElement) {
+    // get relevent objects
     const mod_actions = <HTMLDivElement>this.parentElement!;
     const thisComment = <HTMLDivElement>mod_actions.parentElement!;
+
+    //get relevent json constants
     let structure = COMMENT_STRUCT.COMMENT.MOD_ACTIONS;
+    //swap if is reply instead of comment
     if (thisComment.classList.contains("reply")) {
       structure = COMMENT_STRUCT.REPLY.MOD_ACTIONS;
     }
+
+    // rearrange mod actions
     arrange_mod_actions(
       mod_actions,
       structure,
       MOD_ACTIONS_ARRANGEMENT.removing,
     );
   }
+  /**
+   * Callback Function for remove confirmation button.
+   * Rearranges mod actions.
+   * Removes the relevent comment/reply.
+   * @param this the button contained in the relevent mod_actions div
+   */
   async function callback_button_remove_confirm(this: HTMLButtonElement) {
+    // get relevent objects
     const mod_actions = <HTMLDivElement>this.parentElement!;
     const thisComment = <HTMLDivElement>mod_actions.parentElement!;
+
+    //get relevent json constants
     let structure = COMMENT_STRUCT.COMMENT.MOD_ACTIONS;
     let struct_id = COMMENT_STRUCT.COMMENT.comment_id;
     let struct_body = COMMENT_STRUCT.COMMENT.comment_body;
+    //swap if is reply instead of comment
     if (thisComment.classList.contains("reply")) {
       structure = COMMENT_STRUCT.REPLY.MOD_ACTIONS;
       struct_id = COMMENT_STRUCT.REPLY.reply_id;
       struct_body = COMMENT_STRUCT.REPLY.reply_body;
     }
+
+    // rearrange mod actions
     arrange_mod_actions(
       mod_actions,
       structure,
       MOD_ACTIONS_ARRANGEMENT.removed,
     );
 
+    // get comment ID
     const commentID = thisComment.children[struct_id].textContent!;
 
+    // make post request
     const newCommentData = await removeCommentCall(commentID);
-    const newCommentJson = newCommentData.commentData;
 
+    // update comment
+    const newCommentJson = newCommentData.commentData;
     thisComment.children[struct_body].textContent = newCommentJson.content;
   }
+  /**
+   * Callback Function for remove cancellation button.
+   * Rearranges mod actions.
+   * @param this the button contained in the relevent mod_actions div
+   */
   async function callback_button_remove_cancel(this: HTMLButtonElement) {
+    // get relevent objects
     const mod_actions = <HTMLDivElement>this.parentElement!;
     const thisComment = <HTMLDivElement>mod_actions.parentElement!;
+
+    //get relevent json constants
     let structure = COMMENT_STRUCT.COMMENT.MOD_ACTIONS;
+    //swap if is reply instead of comment
     if (thisComment.classList.contains("reply")) {
       structure = COMMENT_STRUCT.REPLY.MOD_ACTIONS;
     }
+
+    // rearrange mod actions
     arrange_mod_actions(mod_actions, structure, MOD_ACTIONS_ARRANGEMENT.idle);
   }
 
+  /**
+   * Callback Function for redact button.
+   * Rearranges mod actions.
+   * @param this the button contained in the relevent mod_actions div
+   */
   async function callback_button_redact(this: HTMLButtonElement) {
+    // get relevent objects
     const mod_actions = <HTMLDivElement>this.parentElement!;
     const thisComment = <HTMLDivElement>mod_actions.parentElement!;
+
+    //get relevent json constants
     let structure = COMMENT_STRUCT.COMMENT.MOD_ACTIONS;
     let struct_body = COMMENT_STRUCT.COMMENT.comment_body;
     let struct_textarea = COMMENT_STRUCT.COMMENT.comment_body_textarea;
+    //swap if is reply instead of comment
     if (thisComment.classList.contains("reply")) {
       structure = COMMENT_STRUCT.REPLY.MOD_ACTIONS;
       struct_body = COMMENT_STRUCT.REPLY.reply_body;
       struct_textarea = COMMENT_STRUCT.REPLY.reply_body_textarea;
     }
+
+    // rearrange mod actions
     arrange_mod_actions(
       mod_actions,
       structure,
       MOD_ACTIONS_ARRANGEMENT.redacting,
     );
 
+    // get <p> and <textarea> elements
     const body = <HTMLParagraphElement>thisComment.children[struct_body];
     const textarea = <HTMLTextAreaElement>thisComment.children[struct_textarea];
 
+    // hide <p> and show <textarea>, copy text over
     body.hidden = true;
     textarea.hidden = false;
     textarea.textContent = body.textContent;
   }
+  /**
+   * Callback Function for redact confirmation button.
+   * Does not rearrange mod actions.
+   * redactes the relevent comment/reply.
+   * @param this the button contained in the relevent mod_actions div
+   */
   async function callback_button_redact_confirm(this: HTMLButtonElement) {
+    // get relevent objects
     const mod_actions = <HTMLDivElement>this.parentElement!;
     const thisComment = <HTMLDivElement>mod_actions.parentElement!;
+
+    //get relevent json constants
     let structure = COMMENT_STRUCT.COMMENT.MOD_ACTIONS;
     let struct_id = COMMENT_STRUCT.COMMENT.comment_id;
     let struct_textarea = COMMENT_STRUCT.COMMENT.comment_body_textarea;
+    //swap if is reply instead of comment
     if (thisComment.classList.contains("reply")) {
       structure = COMMENT_STRUCT.REPLY.MOD_ACTIONS;
       struct_id = COMMENT_STRUCT.REPLY.reply_id;
       struct_textarea = COMMENT_STRUCT.REPLY.reply_body_textarea;
     }
+
+    // get <textarea> element
     const textarea = <HTMLTextAreaElement>(
       thisComment.children[struct_textarea]!
     );
+
+    // get the selected area
     const sStart = textarea.selectionStart;
     const sEnd = textarea.selectionEnd;
     console.log(textarea.textContent!.slice(sStart, sEnd));
 
+    // get comment ID
     const commentID = thisComment.children[struct_id].textContent!;
 
+    // make post request
     const newCommentData = await redactCommentCall(commentID, sStart, sEnd);
-    const newCommentJson = newCommentData.commentData;
 
+    // update comment
+    const newCommentJson = newCommentData.commentData;
     thisComment.children[struct_textarea].textContent = newCommentJson.content;
   }
+  /**
+   * Callback Function for redact finish button.
+   * Rearranges mod actions.
+   * @param this the button contained in the relevent mod_actions div
+   */
   async function callback_button_redact_cancel(this: HTMLButtonElement) {
+    // get relevent objects
     const mod_actions = <HTMLDivElement>this.parentElement!;
     const thisComment = <HTMLDivElement>mod_actions.parentElement!;
+
+    //get relevent json constants
     let structure = COMMENT_STRUCT.COMMENT.MOD_ACTIONS;
     let struct_body = COMMENT_STRUCT.COMMENT.comment_body;
     let struct_textarea = COMMENT_STRUCT.COMMENT.comment_body_textarea;
+    //swap if is reply instead of comment
     if (thisComment.classList.contains("reply")) {
       structure = COMMENT_STRUCT.REPLY.MOD_ACTIONS;
       struct_body = COMMENT_STRUCT.REPLY.reply_body;
       struct_textarea = COMMENT_STRUCT.REPLY.reply_body_textarea;
     }
+    // rearrange mod actions
     arrange_mod_actions(mod_actions, structure, MOD_ACTIONS_ARRANGEMENT.idle);
 
+    // get <p> and <textarea> elements
     const body = <HTMLParagraphElement>thisComment.children[struct_body];
     const textarea = <HTMLTextAreaElement>thisComment.children[struct_textarea];
 
+    // hide <textarea> and show <p>, copy text over
     textarea.hidden = true;
     body.hidden = false;
     body.textContent = textarea.textContent;
@@ -934,7 +1150,9 @@
 
   SVG sources linked in HTML comments or in .svg file comments.
   
-  No AI was used in the production of this project.-->
+  No AI was used in the production of this project.
+  
+  More information can be found in README.md-->
   <header>
     <section class="header_flex">
       <h1 hidden>The New York Times</h1>
@@ -1001,13 +1219,7 @@
     </div>
     <form class="comment_form">
       <input class="comment_textbox" type="text" />
-      <button class="comment_submit">
-        {#if email}
-          Post
-        {:else}
-          Login
-        {/if}
-      </button>
+      <button class="comment_submit"> Post </button>
       <p hidden>ARTICLE_ID</p>
     </form>
     <section id="comments_list">
@@ -1071,13 +1283,7 @@
       </section>
       <form class="reply_form">
         <input class="reply_textbox" type="text" />
-        <button class="reply_submit">
-          {#if email}
-            Post
-          {:else}
-            Login
-          {/if}
-        </button>
+        <button class="reply_submit"> Post </button>
       </form>
       <div class="line_horizontal"></div>
     </div>
@@ -1119,16 +1325,18 @@
     background-color: #dfdfdf;
     overflow-y: auto;
     transition: 0.5s;
-    transform: translateX(100%); /* Testing this */
+    transform: translateX(100%);
     margin: 0;
-
-    /* Does this tackle the squishing */
     display: flex;
     flex-direction: column;
 
     div,
     section {
       padding: 5px;
+    }
+    h1 {
+      font-size: large;
+      margin-bottom: 0px;
     }
   }
 
